@@ -9,7 +9,7 @@ interface Weather {
   text: string
 }
 
-export default async function WeatherDetail(handle: Handle) {
+export default async function (handle: Handle) {
   const { id } = useParams(handle)
   const weather = await handle.async<Weather>(
     () =>

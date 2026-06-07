@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", sans-serif;
+}
+
+a {
+  @apply text-slate-100 hover:text-amber-500 no-underline transition-colors duration-150;
+}
+
+/* Custom styles for HTML formatted comment contents from HN API */
+.comment-text a {
+  @apply text-amber-500 hover:underline break-all;
+}
+.comment-text p {
+  @apply my-2;
+}
+.comment-text pre {
+  @apply bg-slate-900/60 border border-slate-800 p-3 rounded-lg overflow-x-auto my-3 text-xs font-mono whitespace-pre-wrap;
+}
+.comment-text code {
+  @apply font-mono bg-slate-900/60 px-1 py-0.5 rounded text-xs;
+}
+
