@@ -9,7 +9,7 @@ interface Weather {
   text: string
 }
 
-export default async function (handle: Handle) {
+export default async function WeatherDetail(handle: Handle) {
   const { id } = useParams(handle)
   const value = await handle.async<Weather>(() =>
     fetch(`https://www.jma.go.jp/bosai/forecast/data/overview_forecast/${id}.json`).then((v) =>

@@ -267,6 +267,20 @@ function createRootFrameHandle(init: {
       )
     })
 
+  let data = { a: {} } as { a: Record<string, any> }
+  if (typeof document !== 'undefined') {
+    let remixDataNode = document.getElementById('__REMIX_DATA__')
+    if (remixDataNode && remixDataNode instanceof HTMLScriptElement) {
+      try {
+        const parsed = JSON.parse(remixDataNode.textContent || '{}')
+        data.a = { ...data.a, ...parsed }
+        remixDataNode.remove()
+      } catch (e) {
+        console.error('Failed to parse __REMIX_DATA__ in createRootFrameHandle', e)
+      }
+    }
+  }
+
   let frame = createFrameHandle({
     src: init.src ?? '/',
     $runtime: {
@@ -282,7 +296,7 @@ function createRootFrameHandle(init: {
       pendingClientEntries: new Map(),
       scheduler: init.scheduler,
       styleManager: init.styleManager,
-      data: { a: {} },
+      data,
       moduleCache: new Map(),
       moduleLoads: new Map(),
       frameInstances: new WeakMap(),

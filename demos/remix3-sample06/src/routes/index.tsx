@@ -20,7 +20,7 @@ interface Area {
   class20s: Centers
 }
 
-export default async function (handle: Handle) {
+export default async function Index(handle: Handle) {
   const value = await handle.async<Area>(() =>
     fetch('https://www.jma.go.jp/bosai/common/const/area.json').then((v) => v.json()),
   )

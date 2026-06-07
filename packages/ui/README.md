@@ -193,6 +193,36 @@ function Layout(handle: Handle<{ children: RemixNode }>) {
 }
 ```
 
+## Async Components & Data Fetching
+
+You can define your component setup function as an `async` function to perform asynchronous tasks (e.g., data fetching) using the `handle.async()` helper.
+
+```tsx
+import type { Handle } from 'remix/ui'
+
+interface Weather {
+  targetArea: string
+  headlineText: string
+  text: string
+}
+
+export default async function WeatherForecast(handle: Handle) {
+  const data = await handle.async<Weather>(() =>
+    fetch("https://api.example.com/weather").then((res) => res.json())
+  )
+
+  return () => (
+    <div>
+      <h1>{data.targetArea}</h1>
+      <p>{data.headlineText}</p>
+      <pre>{data.text}</pre>
+    </div>
+  )
+}
+```
+
+On the server, the asynchronous action is executed, and its resolved value is serialized and embedded in the HTML response. During client-side hydration, the component runtime automatically resolves `handle.async()` with the serialized data synchronously instead of re-running the fetch action, ensuring seamless hydration.
+
 ## Cascade Layers
 
 Remix UI emits its built-in theme reset in `rmx-reset` and generated `css(...)` rules under `rmx`. Unlayered CSS outranks layered component CSS, so use explicit layer order when mixing Remix UI with global styles.
