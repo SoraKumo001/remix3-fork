@@ -1,7 +1,6 @@
-import { renderToStream, renderToString } from "@remix-run/ui/server";
+import { renderToStream } from "@remix-run/ui/server";
 import { Layout } from "./root";
 import {
-  resolveFrame,
   SSRProvider,
   type SSRProps,
 } from "./provider/SSRProvider";
@@ -20,17 +19,7 @@ const handler = (url: string) => {
         <SSRProvider storage={storage}>
           <Layout />
         </SSRProvider>
-      </RouterProvider>,
-      {
-        resolveFrame: (src) =>
-          resolveFrame(src, storage.states, (node) =>
-            renderToString(
-              <RouterProvider value={routerContext}>
-                {node}
-              </RouterProvider>
-            )
-          ),
-      }
+      </RouterProvider>
     ),
     {
       headers: {

@@ -1,4 +1,4 @@
-import { Frame, type Handle, type RemixNode } from '@remix-run/ui'
+import { type Handle, type RemixNode } from '@remix-run/ui'
 
 const isServer = typeof window === 'undefined'
 const SSR_DATA_NAME = '__REMIX3_SSR__'
@@ -15,6 +15,32 @@ type SSRState<T = unknown> = SSRResult<T> & {
 
 export type SSRProps = {
   states: Record<string, SSRState>
+}
+
+export function SSRDataScript(handle: Handle) {
+  const context = handle.context.get(SSRProvider)
+  if (!context || !isServer) {
+    return () => null
+  }
+
+  const promise = (async () => {
+    let length = 0
+    while (length !== Object.values(context.states).length) {
+      await Promise.all(Object.values(context.states).map((v) => v.promise))
+      length = Object.values(context.states).length
+    }
+  })()
+
+  return promise.then(() => {
+    return () => {
+      const values: Record<string, unknown> = {}
+      for (const [key, state] of Object.entries(context.states)) {
+        values[key] = state.value
+      }
+      const serializedData = JSON.stringify(values).replace(/</g, '\\u003c')
+      return <script type="application/json" id={SSR_DATA_NAME} innerHTML={serializedData} />
+    }
+  })
 }
 
 export function SSRProvider(handle: Handle<{ storage?: SSRProps; children: RemixNode }, SSRProps>) {
@@ -48,7 +74,7 @@ export function SSRProvider(handle: Handle<{ storage?: SSRProps; children: Remix
     return (
       <>
         {children}
-        {isServer && <Frame src="ssr-data:" />}
+        {isServer && <SSRDataScript />}
       </>
     )
   }
@@ -74,68 +100,47 @@ export function SSRFetch<T>(
     children: RemixNode
   }>,
 ) {
-  return () => {
-    const { name, action, children } = handle.props
-    const context = handle.context.get(SSRProvider)
-    if (!context) return undefined
-    const frameName = `ssr:${name}`
-    if (!context.states[frameName]) {
-      const promise = action()
-      const state: SSRState<T> = {
-        promise,
-        state: 'loading',
-        value: undefined,
-        children,
-      }
-      context.states[frameName] = state
-      promise.then((v) => {
-        context.states[frameName].state = 'finished'
-        context.states[frameName].value = v
-        if (!isServer) handle.update()
-      })
+  const { name, action, children } = handle.props
+  const context = handle.context.get(SSRProvider)
+  if (!context) {
+    return () => children
+  }
+
+  const frameName = `ssr:${name}`
+  if (!context.states[frameName]) {
+    const promise = action()
+    const state: SSRState<T> = {
+      promise,
+      state: 'loading',
+      value: undefined,
+      children,
     }
-    if (isServer) {
-      return <Frame src={frameName} />
-    } else {
-      const state = context.states[frameName]
-      return (
-        <SSRData value={state.value} state={state.state}>
-          {children}
-        </SSRData>
-      )
+    context.states[frameName] = state
+    promise.then((v) => {
+      context.states[frameName].state = 'finished'
+      context.states[frameName].value = v
+      if (!isServer) handle.update()
+    })
+  }
+
+  const state = context.states[frameName]
+
+  const renderFn = () => (
+    <SSRData value={state.value} state={state.state}>
+      {children}
+    </SSRData>
+  )
+
+  if (isServer) {
+    return state.promise.then(() => renderFn)
+  } else {
+    if (state.state === 'finished') {
+      return renderFn
     }
+    return state.promise.then(() => renderFn)
   }
 }
 
 export const useSSR = <T,>(inst: Handle) => {
   return inst.context.get(SSRData) as SSRResult<T>
-}
-
-export const resolveFrame = async (
-  src: string,
-  states: Record<string, SSRState>,
-  render: (node: RemixNode) => Promise<string> | string,
-): Promise<string> => {
-  if (src === 'ssr-data:') {
-    let length = 0
-    while (length !== Object.values(states).length) {
-      await Promise.all(Object.values(states).map((v) => v.promise))
-      length = Object.values(states).length
-    }
-    const values: Record<string, unknown> = {}
-    for (const [key, p] of Object.entries(states)) {
-      values[key] = await p.promise
-    }
-    const serializedData = JSON.stringify(values).replace(/</g, '\\u003c')
-    return `<script type="application/json" id="${SSR_DATA_NAME}">${serializedData}</script>`
-  }
-  const state = states[src]
-  const children = state.children
-  const value = await state.promise
-  state.value = value
-  return render(
-    <SSRData value={value} state={state.state}>
-      {children}
-    </SSRData>,
-  )
 }

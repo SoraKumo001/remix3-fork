@@ -12,7 +12,12 @@ export type ComponentErrorEvent = ErrorEvent & {
  * @returns An `error` event carrying the original value.
  */
 export function createComponentErrorEvent(error: unknown): ComponentErrorEvent {
-  return new ErrorEvent('error', { error }) as ComponentErrorEvent
+  if (typeof ErrorEvent !== 'undefined') {
+    return new ErrorEvent('error', { error }) as ComponentErrorEvent
+  }
+  const event = new Event('error') as any
+  event.error = error
+  return event as ComponentErrorEvent
 }
 
 /**
