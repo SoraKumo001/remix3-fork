@@ -17,7 +17,6 @@
     "node": ">=24.3.0"
   },
   "scripts": {
-    "postinstall": "node ./scripts/postinstall.ts",
     "build": "pnpm -r build",
     "changes:preview": "node ./scripts/changes-preview.ts",
     "changes:validate": "node ./scripts/changes-validate.ts",
