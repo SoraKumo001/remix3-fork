@@ -101,6 +101,36 @@ describe('stream', () => {
       expect(html).toBe('<textarea>Hello &lt;Ryan&gt; &amp; friends</textarea>')
     })
 
+    it('renders style children as raw text content', async () => {
+      let css = '.space-y-4 { :where(& > :not(:last-child)) { margin-block-end: 1rem; } }'
+      let stream = renderToStream(<style>{css}</style>)
+      let html = await drain(stream)
+
+      expect(html).toBe(`<style>${css}</style>`)
+    })
+
+    it('escapes style end tags in raw text content', async () => {
+      let stream = renderToStream(<style>{'.x::before { content: "</style><div>"; }'}</style>)
+      let html = await drain(stream)
+
+      expect(html).toBe('<style>.x::before { content: "<\\/style><div>"; }</style>')
+    })
+
+    it('renders script children as raw text content', async () => {
+      let js = 'if (a < b && c > d) console.log("ok")'
+      let stream = renderToStream(<script>{js}</script>)
+      let html = await drain(stream)
+
+      expect(html).toBe(`<script>${js}</script>`)
+    })
+
+    it('escapes script end tags in raw text content', async () => {
+      let stream = renderToStream(<script>{'console.log("</script><div>")'}</script>)
+      let html = await drain(stream)
+
+      expect(html).toBe('<script>console.log("<\\/script><div>")</script>')
+    })
+
     it('renders number nodes', async () => {
       let stream = renderToStream(42)
       let html = await drain(stream)

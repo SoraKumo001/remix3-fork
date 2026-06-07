@@ -244,6 +244,28 @@ export default async function WeatherForecast(handle: Handle) {
 
 On the server, the asynchronous action is executed, and its resolved value is serialized and embedded in the HTML response. During client-side hydration, the component runtime creates the resource from the serialized data instead of re-running the fetch action. With `cache: 'page'`, the resource is also kept in memory until the page reloads, so keyed resources can survive unmounts and remounts. Call `resource.refresh()` when the user explicitly asks for fresh data; this works even when no explicit key was provided.
 
+## Server Rendering Raw Text
+
+`renderToStream()` treats `style` and `script` elements as HTML raw text elements. String children are emitted without HTML-escaping `&`, `<`, or `>`, while closing tags are still escaped so inline CSS or JavaScript cannot break out of the element.
+
+This lets apps inline generated CSS without corrupting selectors that depend on raw CSS syntax, such as Tailwind CSS v4 nested utilities:
+
+```tsx
+import { renderToStream } from 'remix/ui/server'
+import css from './index.css?inline'
+
+renderToStream(
+  <html>
+    <head>
+      <style>{css}</style>
+    </head>
+    <body>{/* ... */}</body>
+  </html>,
+)
+```
+
+For example, selectors such as `:where(& > :not(:last-child))` remain valid CSS instead of becoming `:where(&amp; &gt; :not(:last-child))`.
+
 ## Cascade Layers
 
 Remix UI emits its built-in theme reset in `rmx-reset` and generated `css(...)` rules under `rmx`. Unlayered CSS outranks layered component CSS, so use explicit layer order when mixing Remix UI with global styles.

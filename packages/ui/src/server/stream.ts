@@ -550,6 +550,10 @@ function buildElementSegment(
     return buildTextareaElementSegment(tag, processedProps)
   }
 
+  if (!currentIsSvg && (tag === 'script' || tag === 'style')) {
+    return buildRawTextElementSegment(tag, processedProps)
+  }
+
   let attrs =
     !currentIsSvg && tag === 'input'
       ? renderInputAttributes(processedProps)
@@ -578,6 +582,37 @@ function buildTextareaElementSegment(tag: string, props: any): Segment {
   let attrs = renderAttributes(props, false, TEXTAREA_VALUE_PROPS)
   let value = props.value ?? props.defaultValue ?? ''
   return staticSeg(`<${tag}${attrs}>${escapeTextContent(String(value))}</${tag}>`)
+}
+
+function buildRawTextElementSegment(tag: 'script' | 'style', props: any): Segment {
+  let attrs = renderAttributes(props, false)
+  let content = props.innerHTML ?? rawTextContent(props.children)
+  return staticSeg(`<${tag}${attrs}>${escapeRawTextEndTag(String(content), tag)}</${tag}>`)
+}
+
+function rawTextContent(node: RemixNode): string {
+  if (typeof node === 'string' || typeof node === 'number' || typeof node === 'bigint') {
+    return String(node)
+  }
+
+  if (node === null || node === undefined || typeof node === 'boolean') {
+    return ''
+  }
+
+  if (Array.isArray(node)) {
+    return node.map((child) => rawTextContent(child)).join('')
+  }
+
+  if (isRemixElement(node) && node.type === Fragment) {
+    return rawTextContent(node.props.children)
+  }
+
+  return ''
+}
+
+function escapeRawTextEndTag(text: string, tag: 'script' | 'style'): string {
+  let pattern = tag === 'script' ? /<\/script/gi : /<\/style/gi
+  return text.replace(pattern, (match) => `<\\/${match.slice(2)}`)
 }
 
 function renderInputAttributes(props: any): string {
