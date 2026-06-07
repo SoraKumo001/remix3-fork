@@ -53,10 +53,10 @@ export default async function Index(handle: Handle) {
         {/* Header */}
         <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-slate-800 pb-6 mb-6 gap-4">
           <div>
-            <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-orange-400 via-amber-400 to-yellow-500 bg-clip-text text-transparent">
+            <h1 className="text-3xl font-extrabold tracking-tight bg-linear-to-r from-orange-400 via-amber-400 to-yellow-500 bg-clip-text text-transparent">
               Hacker News
             </h1>
-            <p className="text-slate-400 text-sm mt-1">Remix 3 で実装したモダンHNクライアント</p>
+            <p className="text-slate-400 text-sm mt-1">Remix 3 Fork版で実装 </p>
           </div>
           <button
             type="button"
@@ -143,8 +143,9 @@ export default async function Index(handle: Handle) {
               value.map((story, index) => {
                 const domain = story.url ? new URL(story.url).hostname : null
                 return (
-                  <article
+                  <Link
                     key={story.id}
+                    to={`/item/${story.id}`}
                     className="group relative flex gap-4 bg-slate-900/30 border border-slate-900 hover:border-slate-800/80 hover:bg-slate-900/60 rounded-xl p-4 transition-all duration-200"
                   >
                     <div className="flex items-center justify-center text-slate-500 font-bold text-lg w-8 h-8 rounded-lg bg-slate-900/80 border border-slate-800/60 shrink-0">
@@ -152,23 +153,14 @@ export default async function Index(handle: Handle) {
                     </div>
                     <div className="flex-1 min-w-0">
                       <h2 className="text-base font-semibold leading-tight text-slate-100 group-hover:text-amber-400 transition-colors">
-                        {story.url ? (
-                          <a
-                            href={story.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="hover:text-amber-400 flex items-center gap-1 inline-flex flex-wrap"
-                          >
-                            {story.title}
-                            <span className="text-xs text-slate-500 font-normal hover:underline ml-1">
+                        <span className="inline-flex items-center gap-1 flex-wrap">
+                          {story.title}
+                          {domain && (
+                            <span className="text-xs text-slate-500 font-normal ml-1">
                               ({domain})
                             </span>
-                          </a>
-                        ) : (
-                          <Link to={`/item/${story.id}`} className="hover:text-amber-400">
-                            {story.title}
-                          </Link>
-                        )}
+                          )}
+                        </span>
                       </h2>
                       <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400">
                         <span className="font-medium text-slate-300">{story.score} points</span>
@@ -177,10 +169,7 @@ export default async function Index(handle: Handle) {
                         <span>•</span>
                         <span>{formatTime(story.time)}</span>
                         <span>•</span>
-                        <Link
-                          to={`/item/${story.id}`}
-                          className="hover:text-amber-400 text-amber-500/80 font-medium inline-flex items-center gap-1"
-                        >
+                        <span className="text-amber-500/80 font-medium inline-flex items-center gap-1">
                           <svg
                             className="w-3.5 h-3.5"
                             fill="none"
@@ -195,10 +184,10 @@ export default async function Index(handle: Handle) {
                             />
                           </svg>
                           {story.descendants || 0} コメント
-                        </Link>
+                        </span>
                       </div>
                     </div>
-                  </article>
+                  </Link>
                 )
               })}
           </div>

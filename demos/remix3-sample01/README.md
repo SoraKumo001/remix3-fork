@@ -1,98 +1,81 @@
-# Remix 3 Sample 06
+# Remix 3 Sample 01
 
-A sample project for Remix 3 (vDOM) with file-based routing, deployed to Cloudflare Workers.
+Hacker News API を使った Remix 3 / `@remix-run/ui` のページ遷移デモです。トップページの記事カードをクリックすると `/item/:id` のコメントページへ遷移し、データ読み込み中は `handle.async` の pending resource を使って skeleton UI を表示します。
 
-[Live Demo](https://remix3-sample06.mofon001.workers.dev/)
+[Live Demo](https://remix3-fork-sample01.mofon001.workers.dev/)
 
-## 非同期コンポーネント（Async Components）とデータ取得
+## 目的
 
-このサンプルプロジェクトでは、`@remix-run/ui` が提供する非同期コンポーネントとデータ取得の仕組みを使用しています。ルート定義ファイル（例: `src/routes/weather.$id.tsx`）では、セットアップ関数を `async` として定義し、データのフェッチ処理を行うことができます。
+- `@remix-run/ui` の async component と `handle.async` を使ったデータ取得を確認する
+- サーバー初期表示で取得したデータを HTML に埋め込み、Hydration では再 fetch しない
+- ブラウザ上のページ遷移では、データ取得の完了を待たずに pending UI を先に描画する
+- `cache: 'page'` で、ページがリロードされるまでデータをメモリ上に保持する
+- `refresh()` で、明示的に最新データを再取得する
+
+## 画面
+
+- `/`: Hacker News の top stories を表示します。カード全体が `/item/:id` へのリンクになっていて、外部 URL のドメインは記事情報として表示します。
+- `/item/:id`: 記事詳細とコメント一覧を表示します。更新ボタンを押すと詳細 resource を再取得します。
+
+## handle.async の使い方
 
 ```tsx
-export default async function (handle: Handle) {
-  const { id } = useParams(handle)
-  const weather = await handle.async<Weather>(
-    () => fetch(`https://api.example.com/weather/${id}`).then((v) => v.json()),
+export default async function Index(handle: Handle) {
+  const stories = await handle.async<Story[]>(
+    async () => {
+      const res = await fetch('https://hacker-news.firebaseio.com/v0/topstories.json')
+      const ids: number[] = await res.json()
+
+      return Promise.all(
+        ids.slice(0, 30).map(async (id) => {
+          const itemRes = await fetch(`https://hacker-news.firebaseio.com/v0/item/${id}.json`)
+          return itemRes.json() as Promise<Story>
+        }),
+      )
+    },
     {
-      key: `jma:weather:${id}`,
+      key: 'hn:topstories',
       cache: 'page',
     },
   )
 
   return () => {
-    const value = weather.value
+    const value = stories.value
 
-    return (
-      <div>
-        <button
-          disabled={weather.pending}
-          mix={on('click', async () => {
-            const refresh = weather.refresh()
-            await handle.update()
-            await refresh
-            await handle.update()
-          })}
-        >
-          更新
-        </button>
-        {value && <h1>{value.targetArea}</h1>}
-      </div>
-    )
+    return stories.pending && !value ? <StoriesSkeleton /> : <StoriesList stories={value ?? []} />
   }
 }
 ```
 
-`handle.async` は取得した値そのものではなく、`value`、`pending`、`error`、`refresh()`、`clear()` を持つ resource オブジェクトを返します。`refresh()` は明示キーがない場合でも、その resource に紐付くアクションを再実行できます。
+`handle.async` は取得した値そのものではなく、`value`、`pending`、`error`、`refresh()`、`clear()` を持つ resource オブジェクトを返します。このサンプルでは `await handle.async(...)` と書いていますが、ブラウザ上のクライアント遷移ではデータ完了を待たずに pending 状態の resource が返ります。
 
----
+## SSR、Hydration、クライアント遷移
 
-## ハイドレーション時のデータ引き渡しメカニズム
+サーバー側の初期表示では、`await handle.async(...)` がデータ取得完了まで待機し、取得した値を `__REMIX_DATA__` にシリアライズして HTML に埋め込みます。ブラウザの Hydration ではこのデータを復元するため、同じ action は再実行されません。
 
-サーバー側で非同期に取得したデータが、クライアント側のハイドレーション後にコンポーネントへどのように引き渡されているかの仕組みは以下の通りです。
+クライアント上でトップページからコメントページへ遷移した場合は、`handle.async` が pending 状態の resource をすぐに返します。これにより、画面全体が空になるのではなく、データ読み込み中の skeleton を表示できます。取得が完了すると resource の `value` が更新され、`handle.update()` によって画面が再描画されます。
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant Server as サーバー (SSR)
-    participant Browser as ブラウザ (HTML / DOM)
-    participant Client as クライアントランタイム (Hydration)
+## ページ内キャッシュと更新
 
-    Server->>Server: handle.async() のアクションを実行してデータを取得
-    Note over Server: データを明示キーまたはコンポーネントの階層IDキー<br/>(例: async:jma:weather:130000) に紐付けてストアに保存
-    Server->>Browser: ストアを JSON 形式にして <script id="__REMIX_DATA__"> として埋め込み、HTML を送信
-    Note over Browser: サーバーから届いた初期HTMLを表示
-    Client->>Browser: __REMIX_DATA__ から JSON データをパースして初期化
-    Client->>Client: ハイドレーション開始
-    Note over Client: async コンポーネント実行時に<br/>明示キーまたは自動生成キーでストア内を検索
-    alt キャッシュが存在する場合 (ハイドレーション時)
-        Client->>Client: fetchを再実行せず、シリアライズ済みのデータでresourceを初期化
-        Client->>Browser: 既存の DOM 要素を再利用してバインド (ハイドレーション完了)
-    else キャッシュが存在しない場合 (画面遷移など)
-        Client->>Server: アクション (fetch) を実行して新規データを取得
-    end
+`cache: 'page'` を指定した resource は、コンポーネントがアンマウントされてもページがリロードされるまで保持されます。このサンプルでは一覧に `hn:topstories`、詳細に `hn:item:${id}` のキーを付けています。
+
+更新ボタンでは `refresh()` を呼び、キャッシュを使わずに action を再実行します。再取得中も直前の `value` は保持されるため、コメント一覧の内容は pending 中に消えません。
+
+## 実装メモ
+
+- トップページの記事カードは `Link` で `/item/:id` に遷移します。ページ遷移の確認デモなので、一覧上のタイトルは外部サイトへ直接遷移しません。
+- コメント本文は Hacker News API から HTML として返るため、`innerHTML={comment.text}` で描画します。
+- Tailwind CSS は `src/index.css?inline` から読み込みます。`@remix-run/ui/server` は `style` 要素内の raw text を保持するため、Tailwind v4 の `:where(& > ...)` のようなセレクタもそのまま動作します。
+
+## Commands
+
+```sh
+pnpm --filter remix3-fork-sample01 run dev
+pnpm --filter remix3-fork-sample01 run build
 ```
 
-### 1. サーバーサイド（SSRフェーズ）
+## Related Files
 
-1. サーバー上でのレンダリング時、`handle.async(action, options)` に渡されたアクション（`fetch` など）が実行され、解決されたデータが一時ストアに蓄積されます。
-2. このときデータは、`options.key` で指定した明示キー（例: `async:jma:weather:130000`）、またはコンポーネントの階層構造から自動生成された一意な ID キーと紐付けられます。
-3. レンダリングの最後で、ストアに蓄積されたすべての非同期データがシリアライズされ、`<script type="application/json" id="__REMIX_DATA__">` タグとしてHTMLの末尾に埋め込まれてブラウザへ送信されます。
-
-### 2. クライアントサイド（ハイドレーションフェーズ）
-
-1. ブラウザにHTMLとJavaScriptが読み込まれると、クライアントのコンポーネントランタイム（`@remix-run/ui`）が起動します。
-2. ランタイムはまず DOM 上から `__REMIX_DATA__` をパースし、クライアント側のデータストアに復元して保持します。
-3. `createRoot` によるハイドレーション処理が走り、非同期コンポーネントが評価されると、ランタイムはサーバー側と同じキーを算出します。
-4. `handle.async` の呼び出し時、ストア内に該当するキーのデータが存在するか確認します。
-   - **データが存在する場合（初期ロード時）**: 渡されたアクション（`fetch`）は再実行されず、ストア内のシリアライズされたデータで resource が初期化されます。これによって、無駄なネットワークリクエストを防ぎます。
-   - **データが存在しない場合（クライアントサイドのページ遷移時など）**: 渡された非同期アクション（`fetch`）が通常どおり実行されます。
-
-### 3. ページ内キャッシュと再取得
-
-`cache: 'page'` を指定した resource は、ページがリロードされるまでメモリ上に保持されます。このサンプルでは一覧データに `jma:area`、詳細データに `jma:weather:${id}` の明示キーを付けているため、コンポーネントがアンマウントされても同じページ内で戻ってきたときに再フェッチされません。
-
-ユーザーが最新データを取り直したい場合は、resource の `refresh()` を呼びます。`refresh()` はキャッシュを無視してアクションを再実行し、完了後に `resource.value` を更新します。
-
-### 4. 非同期解決中のハイドレーション保護
-
-ハイドレーションの初回パスでは、async コンポーネントは一時的に `null`（非表示）を返しますが、ランタイムはハイドレーション位置の DOM カーソルを破棄せず `ComponentRuntime` に記憶します。Promise 解決後にその記憶したカーソルを使って既存の HTML に対しハイドレーションを再開するため、画面が一瞬消えたりコンテンツが二重に描画されたりする問題を防ぎ、シームレスなハイドレーションが行われます。
+- `src/routes/index.tsx`
+- `src/routes/item.$id.tsx`
+- `src/provider/RouterProvider.tsx`
