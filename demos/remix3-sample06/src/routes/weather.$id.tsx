@@ -1,5 +1,4 @@
 import { type Handle } from '@remix-run/ui'
-import { SSRFetch, useSSR } from '../provider/SSRProvider'
 import { Link, useParams } from '../provider/RouterProvider'
 
 interface Weather {
@@ -10,27 +9,15 @@ interface Weather {
   text: string
 }
 
-export default function (handle: Handle) {
-  return () => {
-    const { id } = useParams(handle)
-    return (
-      <SSRFetch
-        name={`weather-${id}`}
-        action={() =>
-          fetch(`https://www.jma.go.jp/bosai/forecast/data/overview_forecast/${id}.json`).then(
-            (v) => v.json(),
-          )
-        }
-      >
-        <WeatherItem />
-      </SSRFetch>
-    )
-  }
-}
+export default async function (handle: Handle) {
+  const { id } = useParams(handle)
+  const value = await handle.async<Weather>(() =>
+    fetch(`https://www.jma.go.jp/bosai/forecast/data/overview_forecast/${id}.json`).then((v) =>
+      v.json(),
+    ),
+  )
 
-function WeatherItem(handle: Handle) {
   return () => {
-    const { value, state } = useSSR<Weather>(handle)
     return (
       <div className="p-2">
         <div className="mb-4">
@@ -38,7 +25,6 @@ function WeatherItem(handle: Handle) {
             戻る
           </Link>
         </div>
-        {state === 'loading' && <div>Loading...</div>}
         {value && (
           <div className="max-w-4xl">
             <h1 className="text-2xl font-bold mb-2">{value.targetArea}</h1>

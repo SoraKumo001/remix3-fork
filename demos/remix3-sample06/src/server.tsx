@@ -1,13 +1,8 @@
 import { renderToStream } from "@remix-run/ui/server";
 import { Layout } from "./root";
-import {
-  SSRProvider,
-  type SSRProps,
-} from "./provider/SSRProvider";
 import { RouterProvider } from "./provider/RouterProvider";
 
 const handler = (url: string) => {
-  const storage: SSRProps = { states: {} };
   const routerContext = {
     serverUrl: url,
     navigate: () => {},
@@ -16,9 +11,7 @@ const handler = (url: string) => {
   return new Response(
     renderToStream(
       <RouterProvider value={routerContext}>
-        <SSRProvider storage={storage}>
-          <Layout />
-        </SSRProvider>
+        <Layout />
       </RouterProvider>
     ),
     {

@@ -91,11 +91,12 @@ export function run(init: RunInit): AppRuntime {
     pendingClientEntries: new Map(),
     scheduler,
     styleManager,
-    data: {},
+    data: { a: {} },
     moduleCache: new Map(),
     moduleLoads: new Map(),
     frameInstances: new WeakMap(),
     namedFrames,
+    componentCounters: new Map(),
   })
 
   let appController = new AbortController()

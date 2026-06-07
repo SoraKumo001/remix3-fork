@@ -1,5 +1,4 @@
 import { type Handle } from '@remix-run/ui'
-import { SSRFetch, useSSR } from '../provider/SSRProvider'
 import { Link } from '../provider/RouterProvider'
 
 interface Center {
@@ -21,32 +20,19 @@ interface Area {
   class20s: Centers
 }
 
-export default function (handle: Handle) {
-  return () => (
-    <SSRFetch
-      name="area-list"
-      action={() =>
-        fetch('https://www.jma.go.jp/bosai/common/const/area.json').then((v) => v.json())
-      }
-    >
-      <List />
-    </SSRFetch>
+export default async function (handle: Handle) {
+  const value = await handle.async<Area>(() =>
+    fetch('https://www.jma.go.jp/bosai/common/const/area.json').then((v) => v.json()),
   )
-}
 
-function List(handle: Handle) {
-  return () => {
-    const { value, state } = useSSR<Area>(handle)
-    return (
-      <div className="p-2">
-        {state === 'loading' && <div>Loading...</div>}
-        {value &&
-          Object.entries(value.offices).map(([code, { name }]) => (
-            <div key={code}>
-              <Link to={`/weather/${code}`}>{name}</Link>
-            </div>
-          ))}
-      </div>
-    )
-  }
+  return () => (
+    <div className="p-2">
+      {value &&
+        Object.entries(value.offices).map(([code, { name }]) => (
+          <div key={code}>
+            <Link to={`/weather/${code}`}>{name}</Link>
+          </div>
+        ))}
+    </div>
+  )
 }

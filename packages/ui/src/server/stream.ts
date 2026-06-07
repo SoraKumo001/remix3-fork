@@ -104,6 +104,8 @@ interface RenderContext {
   flushKind: FlushKind
   serverIdScope: string
   serverIdCounter: number
+  componentCounters: Map<string, number>
+  a: Record<string, any>
 }
 
 interface ResolvedFrameHtml {
@@ -218,7 +220,21 @@ export function renderToStream(
     flushKind: 'fragment',
     serverIdScope: crypto.randomUUID().slice(0, 8),
     serverIdCounter: 0,
+    componentCounters: new Map(),
+    a: {},
   }
+
+  const ssrData: any = { a: context.a }
+  Object.assign(rootFrameState.frame, {
+    $runtime: {
+      data: ssrData
+    }
+  })
+  Object.assign(rootFrameState.topFrame, {
+    $runtime: {
+      data: ssrData
+    }
+  })
 
   function cancel(reason: unknown): void {
     if (!renderAbortController.signal.aborted) {
@@ -327,9 +343,20 @@ function randomId(prefix: string): string {
   return prefix + crypto.randomUUID().slice(0, 8)
 }
 
-function createServerComponentId(context: RenderContext): string {
-  context.serverIdCounter++
-  return `s${context.serverIdScope}-${context.serverIdCounter}`
+function createServerComponentId(context: RenderContext, type: Function): string {
+  let parentId = 'root'
+  let currParent = context.parentVNode
+  while (currParent) {
+    if (currParent._handle) {
+      parentId = currParent._handle.id
+      break
+    }
+    currParent = currParent._parent
+  }
+  let key = `${parentId}:${type.name || 'Anonymous'}`
+  let counter = (context.componentCounters.get(key) ?? 0) + 1
+  context.componentCounters.set(key, counter)
+  return `${key}:${counter}`
 }
 
 async function splitFirstChunk(stream: ReadableStream<Uint8Array>): Promise<ResolvedFrameHtml> {
@@ -452,7 +479,7 @@ function buildSegment(node: RemixNode, context: RenderContext, frameState: SsrFr
         type,
         props,
         context,
-        createServerComponentId(context),
+        createServerComponentId(context, type),
         frameState,
       )
     }
@@ -1423,25 +1450,31 @@ function dedupeServerStyleTagsInHtml(html: string, seenStyles: Set<string>): str
 }
 
 function buildRmxDataScript(context: RenderContext): string {
-  if (context.hydrationData.size === 0 && context.frameData.size === 0) {
-    return ''
+  let html = ''
+  if (context.hydrationData.size > 0 || context.frameData.size > 0) {
+    let data: {
+      h?: Record<string, HydrationData>
+      f?: Record<string, FrameData>
+    } = {}
+
+    if (context.hydrationData.size > 0) {
+      data.h = Object.fromEntries(context.hydrationData)
+    }
+
+    if (context.frameData.size > 0) {
+      data.f = Object.fromEntries(context.frameData)
+    }
+
+    let serializedData = escapeScriptJson(JSON.stringify(data))
+    html += `<script type="application/json" id="rmx-data">${serializedData}</script>`
   }
 
-  let data: {
-    h?: Record<string, HydrationData>
-    f?: Record<string, FrameData>
-  } = {}
-
-  if (context.hydrationData.size > 0) {
-    data.h = Object.fromEntries(context.hydrationData)
+  if (Object.keys(context.a).length > 0) {
+    let serializedRemixData = escapeScriptJson(JSON.stringify(context.a))
+    html += `<script type="application/json" id="__REMIX_DATA__">${serializedRemixData}</script>`
   }
 
-  if (context.frameData.size > 0) {
-    data.f = Object.fromEntries(context.frameData)
-  }
-
-  let serializedData = escapeScriptJson(JSON.stringify(data))
-  return `<script type="application/json" id="rmx-data">${serializedData}</script>`
+  return html
 }
 
 function escapeScriptJson(json: string): string {

@@ -60,7 +60,6 @@ export interface Handle<Props = Record<string, never>, ContextValue = NoContext>
     readonly top: FrameHandle
     get(name: string): FrameHandle | undefined
   }
-
   /**
    * A signal indicating the connected status of the component. When the
    * component is disconnected from the tree the signal will be aborted.
@@ -93,6 +92,13 @@ export interface Handle<Props = Record<string, never>, ContextValue = NoContext>
    * render/event signals are aborted when the component disconnects.
    */
   signal: AbortSignal
+
+  /**
+   * Helper to perform asynchronous tasks (e.g. data fetching) during setup.
+   * On the server, the action is executed and the resolved value is serialized.
+   * On the client during hydration, the serialized value is used instead of re-running the action.
+   */
+  async<T>(action: () => Promise<T>): Promise<T>
 }
 
 /**
@@ -225,6 +231,7 @@ type ComponentConfig = {
  * Runtime handle returned by {@link createComponent}.
  */
 export interface ComponentHandle<C = NoContext> {
+  id: string
   frame: FrameHandle
   render(nextProps: ElementProps): [RemixNode, Array<() => void>]
   remove(): Array<() => void>
@@ -232,6 +239,9 @@ export interface ComponentHandle<C = NoContext> {
   getContextValue(): C | undefined
   isRemoved(): boolean
   initPromise?: Promise<RenderFn>
+  getHydrationCursor?(): Node | null | undefined
+  clearHydrationCursor?(): void
+  setHydrationCursor?(cursor: Node | null | undefined): void
 }
 
 /**
@@ -245,6 +255,7 @@ export function createComponent<C = NoContext>(config: ComponentConfig): Compone
 }
 
 class ComponentRuntime<C = NoContext> implements ComponentHandle<C> {
+  id: string
   frame: FrameHandle
   initPromise?: Promise<RenderFn>
 
@@ -260,11 +271,22 @@ class ComponentRuntime<C = NoContext> implements ComponentHandle<C> {
     throw new Error('scheduleUpdate not implemented')
   }
   #tasks: Task[] = []
+  #asyncCounter = 0
+  #hydrationCursor: Node | null | undefined = undefined
 
   constructor(config: ComponentConfig) {
     this.#config = config
     this.frame = config.frame
+    this.id = config.id
     this.#handle = this.#createHandle()
+  }
+
+  getHydrationCursor = (): Node | null | undefined => this.#hydrationCursor
+  clearHydrationCursor = (): void => {
+    this.#hydrationCursor = undefined
+  }
+  setHydrationCursor = (cursor: Node | null | undefined): void => {
+    this.#hydrationCursor = cursor
   }
 
   render = (nextProps: ElementProps): [RemixNode, Array<() => void>] => {
@@ -333,6 +355,25 @@ class ComponentRuntime<C = NoContext> implements ComponentHandle<C> {
 
   isRemoved = (): boolean => this.#removed
 
+  async = <T>(action: () => Promise<T>): Promise<T> => {
+    const index = this.#asyncCounter++
+    const key = `${this.#config.id}:async:${index}`
+    const runtime = this.frame.$runtime as { data?: { a?: Record<string, any> } } | undefined
+    const store = runtime?.data?.a
+
+    if (store && key in store) {
+      return Promise.resolve(store[key] as T)
+    }
+
+    const promise = action()
+    promise.then((value) => {
+      if (store) {
+        store[key] = value
+      }
+    }).catch(() => {})
+    return promise
+  }
+
   #createHandle(): Handle<ElementProps, C> {
     let component = this
     let context: Context<C> = {
@@ -371,6 +412,7 @@ class ComponentRuntime<C = NoContext> implements ComponentHandle<C> {
       get signal() {
         return component.#config.signal ?? component.#connectedSignal()
       },
+      async: <T>(action: () => Promise<T>) => this.async(action),
     }
   }
 

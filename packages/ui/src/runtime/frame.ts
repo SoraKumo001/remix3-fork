@@ -27,6 +27,7 @@ type HydrationData = {
 type RmxData = {
   h?: Record<string, HydrationData>
   f?: Record<string, FrameData>
+  a?: Record<string, any>
 }
 
 export type VirtualRootMarker = Comment & {
@@ -111,6 +112,7 @@ export type FrameRuntime = {
   moduleLoads: Map<string, Promise<Function | undefined>>
   frameInstances: WeakMap<Comment, Frame>
   namedFrames: Map<string, FrameHandle>
+  componentCounters: Map<string, number>
 }
 
 export type FrameContext = {
@@ -127,6 +129,7 @@ export type FrameContext = {
   moduleLoads: Map<string, Promise<Function | undefined>>
   frameInstances: WeakMap<Comment, Frame>
   namedFrames: Map<string, FrameHandle>
+  componentCounters: Map<string, number>
   regionTailRef?: ChildNode | null
   regionParent?: ParentNode | null
   signal?: AbortSignal
@@ -148,6 +151,7 @@ type FrameInit = {
   moduleLoads: Map<string, Promise<Function | undefined>>
   frameInstances: WeakMap<Comment, Frame>
   namedFrames: Map<string, FrameHandle>
+  componentCounters: Map<string, number>
 }
 
 export type Frame = {
@@ -241,6 +245,7 @@ export function createFrame(root: FrameRoot, init: FrameInit): Frame {
     moduleLoads: init.moduleLoads,
     frameInstances: init.frameInstances,
     namedFrames: init.namedFrames,
+    componentCounters: init.componentCounters,
     regionTailRef: container.regionTailRef,
     regionParent: container.regionParent,
   }
@@ -611,6 +616,7 @@ export function createFrameRuntime(init: {
   moduleLoads: Map<string, Promise<Function | undefined>>
   frameInstances: WeakMap<Comment, Frame>
   namedFrames: Map<string, FrameHandle>
+  componentCounters: Map<string, number>
 }): FrameRuntime {
   return {
     topFrame: init.topFrame,
@@ -625,6 +631,7 @@ export function createFrameRuntime(init: {
     moduleLoads: init.moduleLoads,
     frameInstances: init.frameInstances,
     namedFrames: init.namedFrames,
+    componentCounters: init.componentCounters,
   }
 }
 
@@ -678,6 +685,17 @@ function mergeRmxDataFromDocument(into: RmxData, doc: Document): void {
     mergeRmxData(into, parseRmxDataScript(script))
     script.remove()
   }
+
+  let remixDataNode = doc.getElementById('__REMIX_DATA__')
+  if (remixDataNode && remixDataNode instanceof HTMLScriptElement) {
+    try {
+      const parsed = JSON.parse(remixDataNode.textContent || '{}')
+      into.a = { ...into.a, ...parsed }
+      remixDataNode.remove()
+    } catch (e) {
+      console.error('Failed to parse __REMIX_DATA__', e)
+    }
+  }
 }
 
 function mergeRmxDataFromFragment(into: RmxData, fragment: DocumentFragment): void {
@@ -686,6 +704,17 @@ function mergeRmxDataFromFragment(into: RmxData, fragment: DocumentFragment): vo
     if (!(script instanceof HTMLScriptElement)) continue
     mergeRmxData(into, parseRmxDataScript(script))
     script.remove()
+  }
+
+  let remixDataNode = fragment.getElementById ? fragment.getElementById('__REMIX_DATA__') : fragment.querySelector('script#__REMIX_DATA__')
+  if (remixDataNode && remixDataNode instanceof HTMLScriptElement) {
+    try {
+      const parsed = JSON.parse(remixDataNode.textContent || '{}')
+      into.a = { ...into.a, ...parsed }
+      remixDataNode.remove()
+    } catch (e) {
+      console.error('Failed to parse __REMIX_DATA__ from fragment', e)
+    }
   }
 }
 
@@ -953,6 +982,7 @@ async function createSubFrames(
             moduleLoads: context.moduleLoads,
             frameInstances: context.frameInstances,
             namedFrames: context.namedFrames,
+            componentCounters: context.componentCounters,
           })
           context.frameInstances.set(node, subFrame)
         }

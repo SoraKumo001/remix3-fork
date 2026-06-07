@@ -1032,6 +1032,7 @@ function insertFrame(
           moduleLoads: runtime.moduleLoads,
           frameInstances: runtime.frameInstances,
           namedFrames: runtime.namedFrames,
+          componentCounters: runtime.componentCounters,
         })
         runtime.frameInstances.set(start, instance)
       }
@@ -1077,6 +1078,7 @@ function insertFrame(
     moduleLoads: runtime.moduleLoads,
     frameInstances: runtime.frameInstances,
     namedFrames: runtime.namedFrames,
+    componentCounters: runtime.componentCounters,
   })
   node._frameInstance = instance
   runtime.frameInstances.set(start, instance)
@@ -1276,6 +1278,14 @@ export function renderComponent(
 ): Node | null | undefined {
   if (handle.isRemoved()) return cursor
 
+  if (cursor !== undefined && handle.setHydrationCursor) {
+    handle.setHydrationCursor(cursor)
+  }
+  let activeCursor = cursor
+  if (activeCursor === undefined && handle.getHydrationCursor) {
+    activeCursor = handle.getHydrationCursor()
+  }
+
   let [element, tasks] = handle.render(next.props)
   let content = toVNode(element)
   let newCursor = diffVNodes(
@@ -1288,8 +1298,15 @@ export function renderComponent(
     next,
     rootTarget,
     anchor,
-    cursor,
+    activeCursor,
   )
+
+  if (handle.initPromise && !handle.getHydrationCursor?.()) {
+    // Keep hydration cursor if still waiting for resolution
+  } else if (!handle.initPromise && handle.clearHydrationCursor) {
+    handle.clearHydrationCursor()
+  }
+
   next._content = content
   next._handle = handle
   next._parent = vParent
@@ -1321,7 +1338,25 @@ function diffComponent(
     if (componentId) {
       vParent._pendingHydrationComponentId = undefined
     } else {
-      componentId = `c${++idCounter}`
+      let runtime = getFrameRuntime(frame)
+      let parentId = 'root'
+      let currParent: VNode | undefined = vParent
+      while (currParent) {
+        if (currParent._handle) {
+          parentId = currParent._handle.id
+          break
+        }
+        currParent = currParent._parent
+      }
+      let counters = runtime?.componentCounters
+      if (counters) {
+        let key = `${parentId}:${next.type.name || 'Anonymous'}`
+        let counter = (counters.get(key) ?? 0) + 1
+        counters.set(key, counter)
+        componentId = `${key}:${counter}`
+      } else {
+        componentId = `c${++idCounter}`
+      }
     }
     next._handle = createComponent({
       id: componentId,

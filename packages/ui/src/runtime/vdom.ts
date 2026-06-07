@@ -282,11 +282,12 @@ function createRootFrameHandle(init: {
       pendingClientEntries: new Map(),
       scheduler: init.scheduler,
       styleManager: init.styleManager,
-      data: {},
+      data: { a: {} },
       moduleCache: new Map(),
       moduleLoads: new Map(),
       frameInstances: new WeakMap(),
       namedFrames: new Map(),
+      componentCounters: new Map(),
     },
   })
   let runtime = frame.$runtime as { topFrame?: FrameHandle } | undefined
