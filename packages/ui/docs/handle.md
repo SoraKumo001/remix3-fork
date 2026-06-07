@@ -166,6 +166,47 @@ function AsyncExample(handle: Handle) {
 }
 ```
 
+## `handle.async(action)`
+
+Helper to perform asynchronous tasks (e.g., data fetching) during component setup.
+
+```ts
+handle.async<T>(action: () => Promise<T>): Promise<T>
+```
+
+When building full-stack applications with server-side rendering, performing asynchronous work during component setup can cause duplicate network requests if executed on both the server and client.
+
+`handle.async` solves this by orchestrating serialization:
+1. **Server Rendering (SSR)**: The asynchronous `action` is executed, and its resolved value is serialized into the HTML payload.
+2. **Client Hydration**: The hydration runtime extracts the serialized values and resolves `handle.async()` calls instantly with the cached data instead of re-running the action.
+
+### Example
+
+```tsx
+import { type Handle } from 'remix/ui'
+
+interface Weather {
+  temperature: number
+  condition: string
+}
+
+async function WeatherWidget(handle: Handle<{ city: string }>) {
+  // Setup runs once, asynchronously
+  let weather = await handle.async<Weather>(async () => {
+    let res = await fetch(`/api/weather?city=${handle.props.city}`)
+    return res.json()
+  })
+
+  // Render function runs on every update
+  return () => (
+    <div>
+      <h3>Weather in {handle.props.city}</h3>
+      <p>{weather.temperature}°C - {weather.condition}</p>
+    </div>
+  )
+}
+```
+
 ## `handle.signal`
 
 An `AbortSignal` that's aborted when the component is disconnected. Useful for cleanup operations.

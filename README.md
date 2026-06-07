@@ -1,17 +1,4 @@
-<br />
-<br />
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/public/remix-wordmark-racing-darkmode.svg">
-    <img alt="Remix" src="docs/public/remix-wordmark-racing-lightmode.svg" width="400">
-  </picture>
-</p>
-
-<br />
-<br />
-
-# Welcome to Remix 3!
+# Welcome to Remix 3 fork!
 
 This is the source repository for Remix 3. It is under active development.
 
@@ -47,82 +34,48 @@ The benefit is code that's not just reusable, but **future-proof**.
 
 ## Packages
 
-Most packages in this repository are standalone JavaScript/TypeScript tools. The `remix` package composes them under one umbrella for distribution and documentation.
+The packages in this repository are managed as a pnpm workspace under `packages/`:
 
-- [assert](packages/assert): Node assert-compatible utilities for any JavaScript environment
-- [assets](packages/assets): Fetch-based server for compiling browser JS/TS and CSS assets on demand
-- [async-context-middleware](packages/async-context-middleware): Middleware for storing request context in AsyncLocalStorage
-- [auth](packages/auth): Browser login, OAuth, and OIDC helpers for Remix
-- [auth-middleware](packages/auth-middleware): Pluggable authentication middleware for Remix
-- [cli](packages/cli): Command-line interface for Remix
-- [compression-middleware](packages/compression-middleware): Middleware for compressing HTTP responses
-- [cookie](packages/cookie): A toolkit for working with cookies in JavaScript
-- [cop-middleware](packages/cop-middleware): Middleware for tokenless cross-origin protection in Fetch API servers
-- [cors-middleware](packages/cors-middleware): Middleware for handling CORS in Fetch API servers
-- [csrf-middleware](packages/csrf-middleware): Middleware for CSRF protection in Fetch API servers
-- [data-schema](packages/data-schema): Tiny, standards-aligned schema validation
-- [data-table](packages/data-table): A typed, relational query toolkit for JavaScript
-- [data-table-mysql](packages/data-table-mysql): MySQL adapter for remix/data-table
-- [data-table-postgres](packages/data-table-postgres): PostgreSQL adapter for remix/data-table
-- [data-table-sqlite](packages/data-table-sqlite): SQLite adapter for remix/data-table
-- [fetch-proxy](packages/fetch-proxy): An HTTP proxy for the web Fetch API
-- [fetch-router](packages/fetch-router): A minimal, composable router for the web Fetch API
-- [file-storage](packages/file-storage): Key/value storage for JavaScript File objects
-- [file-storage-s3](packages/file-storage-s3): S3 backend for remix/file-storage
-- [form-data-middleware](packages/form-data-middleware): Middleware for parsing FormData from request bodies
-- [form-data-parser](packages/form-data-parser): A request.formData() wrapper with streaming file upload handling
-- [fs](packages/fs): Filesystem utilities using the Web File API
-- [headers](packages/headers): A toolkit for working with HTTP headers in JavaScript
-- [html-template](packages/html-template): HTML template tag with auto-escaping for JavaScript
-- [lazy-file](packages/lazy-file): Lazy, streaming files for JavaScript
-- [logger-middleware](packages/logger-middleware): Middleware for logging HTTP requests and responses
-- [method-override-middleware](packages/method-override-middleware): Middleware for overriding HTTP request methods from form data
-- [mime](packages/mime): Utilities for working with MIME types
-- [multipart-parser](packages/multipart-parser): A fast, efficient parser for multipart streams in any JavaScript environment
-- [node-fetch-server](packages/node-fetch-server): Build servers for Node.js using the web fetch API
-- [node-tsx](packages/node-tsx): Run Node.js with TypeScript and JSX syntax support
-- [remix](packages/remix): The Remix web framework
-- [response](packages/response): Response helpers for the web Fetch API
-- [route-pattern](packages/route-pattern): Match and generate URLs with strong typing
-- [session](packages/session): Session management for JavaScript
-- [session-middleware](packages/session-middleware): Middleware for managing sessions with cookie-based storage
-- [session-storage-memcache](packages/session-storage-memcache): Memcache session storage for remix/session
-- [session-storage-redis](packages/session-storage-redis): Redis session storage for remix/session
-- [static-middleware](packages/static-middleware): Middleware for serving static files from the filesystem
-- [tar-parser](packages/tar-parser): A fast, efficient parser for tar streams in any JavaScript environment
-- [terminal](packages/terminal): Terminal output utilities for JavaScript libraries and CLIs
-- [test](packages/test): A test framework for JavaScript and TypeScript projects
-- [ui](packages/ui): View layer with reconciler, component model, and first-party UI components
+- [@remix-run/assert](packages/assert): Node assert-compatible utilities for any JavaScript environment.
+- [@remix-run/node-tsx](packages/node-tsx): Run Node.js with TypeScript and JSX syntax support.
+- [@remix-run/terminal](packages/terminal): Terminal output utilities for JavaScript libraries and CLIs.
+- [@remix-run/test](packages/test): A test framework for JavaScript and TypeScript projects.
+- [@remix-run/ui](packages/ui): View layer with reconciler, component model, and first-party UI components.
 
-## Installation
+## Development
 
-To try the current Remix beta, install the `next` dist-tag:
+This repository uses [pnpm](https://pnpm.io/) for package management.
+
+### Setup
+
+Install dependencies:
 
 ```sh
-npm install remix@next
+pnpm install
 ```
 
-To create a new Remix app with the CLI, use `npx remix@next new`:
+### Build
+
+Build all packages:
 
 ```sh
-npx remix@next new my-remix-app
+pnpm run build
 ```
 
-If you want to play around with the bleeding edge, we also build the latest `main` branch into a `preview/main` branch which can be [installed directly](https://pnpm.io/package-sources#install-from-a-git-repository-combining-different-parameters) with `pnpm` (version 9+):
+Or build a specific package:
 
 ```sh
-pnpm install "remix-run/remix#preview/main&path:packages/remix"
+pnpm --filter @remix-run/ui run build
 ```
 
-Or, just install a single package:
+### Testing and Validation
 
-```
-pnpm install "remix-run/remix#preview/main&path:packages/fetch-router"
-```
+Run tests and linting across the monorepo:
 
-## Agent Skills For Building Apps
-
-Agents that are starting a Remix 3 app from this repository should use the [`remix` app skill](./.agents/skills/remix/SKILL.md). The CLI prepack step copies this skill into the app template so generated apps can use the same guidance.
+- **Lint**: `pnpm run lint`
+- **Format Check**: `pnpm run format:check`
+- **Test**: `pnpm test`
+- **Type Check**: `pnpm run typecheck`
 
 ## Contributing
 

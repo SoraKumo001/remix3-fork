@@ -175,7 +175,7 @@ When a frame reloads, its server HTML is re-fetched and diffed into the page. Cl
 
 ## Components
 
-All components receive a handle and return a render function. The component function runs **once** when the component is first created, and the returned render function runs on the first render and **every update** afterward:
+All components receive a handle and return a render function (or a `Promise` resolving to a render function for asynchronous components). The component function runs **once** when the component is first created, and the returned render function runs on the first render and **every update** afterward:
 
 ```tsx
 function Counter(handle: Handle<{ initialCount?: number; label?: string }>) {
@@ -196,6 +196,27 @@ function Counter(handle: Handle<{ initialCount?: number; label?: string }>) {
       >
         Increment
       </button>
+    </div>
+  )
+}
+```
+
+### Async Components
+
+Components can also be `async` functions that return `Promise<RenderFn>`. This is useful for fetching initial data asynchronously before the first render:
+
+```tsx
+async function UserProfile(handle: Handle<{ userId: string }>) {
+  // Setup runs asynchronously. handle.async ensures data is cached for hydration.
+  let user = await handle.async(async () => {
+    let res = await fetch(`/api/users/${handle.props.userId}`)
+    return res.json()
+  })
+
+  return () => (
+    <div>
+      <h2>{user.name}</h2>
+      <p>Email: {user.email}</p>
     </div>
   )
 }
@@ -429,6 +450,7 @@ Components receive a `Handle` as their first argument with the following API:
 
 - **`handle.update()`** - Schedule an update and await completion to get an `AbortSignal`.
 - **`handle.queueTask(task)`** - Schedule a task to run after the next update. Useful for DOM operations that need to happen after rendering (e.g., moving focus, scrolling, measuring elements, etc.).
+- **`handle.async(action)`** - Helper to perform asynchronous tasks (e.g. data fetching) during setup. Enables server serialization and client-side reuse during hydration.
 - **`addEventListeners(target, handle.signal, listeners)`** - Listen to an event target with automatic cleanup when the component disconnects.
 - **`handle.signal`** - An `AbortSignal` that's aborted when the component is disconnected. Useful for cleanup.
 - **`handle.id`** - Stable identifier per component instance.
@@ -548,6 +570,25 @@ function Form(handle: Handle) {
         </section>
       )}
     </form>
+  )
+}
+```
+
+### `handle.async(action)`
+
+Helper to perform asynchronous tasks (e.g. data fetching) during component setup.
+
+On the server during server-side rendering, the async action is executed and the resolved value is automatically serialized and sent down to the client. On the client during hydration, the serialized value is used instantly instead of re-executing the action, ensuring fast hydration and eliminating duplicate network requests.
+
+```tsx
+async function UserProfile(handle: Handle<{ userId: string }>) {
+  let user = await handle.async(async () => {
+    let res = await fetch(`/api/users/${handle.props.userId}`)
+    return res.json()
+  })
+
+  return () => (
+    <div>{user.name}</div>
   )
 }
 ```

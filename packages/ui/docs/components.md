@@ -26,6 +26,7 @@ When a component is rendered:
 1. **First Render**:
 
    - The component function is called with `handle`
+   - If the component function is asynchronous and returns a `Promise`, the runtime awaits its resolution to obtain the `RenderFn` (rendering `null` as a placeholder in the meantime)
    - The returned render function is stored
    - The render function is called after `handle.props` is populated
    - Any tasks queued via `handle.queueTask()` are executed after rendering
@@ -119,6 +120,34 @@ function Counter(handle: Handle) {
   )
 }
 ```
+
+## Async Setup
+
+Components can perform asynchronous setup by returning a `Promise` that resolves to a `RenderFn`. This is particularly useful for loading initial data before rendering the component content.
+
+To support server-side rendering and client-side hydration efficiently, use the `handle.async` helper inside your async setup:
+
+```tsx
+import { type Handle } from 'remix/ui'
+
+async function WeatherWidget(handle: Handle<{ city: string }>) {
+  // Execute async action. On the server, it runs and the result is serialized.
+  // On the client, hydration reuses the serialized value instead of re-fetching.
+  let weather = await handle.async(async () => {
+    let res = await fetch(`/api/weather?city=${handle.props.city}`)
+    return res.json()
+  })
+
+  return () => (
+    <div>
+      <h3>Weather in {handle.props.city}</h3>
+      <p>{weather.temperature}°C - {weather.condition}</p>
+    </div>
+  )
+}
+```
+
+By returning a `Promise<RenderFn>`, the component stays suspended (rendering `null` or a fallback) until the setup completes. During hydration, using `handle.async` prevents duplicate network requests by reusing the server-resolved data.
 
 ## See Also
 
