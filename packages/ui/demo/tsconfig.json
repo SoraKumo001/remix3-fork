@@ -11,7 +11,7 @@
     "isolatedModules": true,
     "skipLibCheck": true,
     "jsx": "react-jsx",
-    "jsxImportSource": "remix/ui",
+    "jsxImportSource": "@remix-run/ui",
     "paths": {
       "*": ["./*"],
       "remix/ui/jsx-runtime": ["../../remix/src/ui/jsx-runtime.ts"],
