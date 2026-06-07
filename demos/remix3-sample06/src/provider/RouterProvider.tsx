@@ -44,7 +44,7 @@ export function RouterProvider(
   }
 }
 
-export const useLocation = (inst: Handle<any, any>) => {
+export const useLocation = (inst: Handle<unknown, unknown>) => {
   if (isServer) {
     const url = new URL(inst.context.get(RouterProvider).serverUrl)
     return url.pathname
@@ -52,7 +52,7 @@ export const useLocation = (inst: Handle<any, any>) => {
   return location.pathname
 }
 
-export const useFullLocation = (inst: Handle<any, any>) => {
+export const useFullLocation = (inst: Handle<unknown, unknown>) => {
   if (isServer) {
     const url = new URL(inst.context.get(RouterProvider).serverUrl)
     return url.href
@@ -60,11 +60,11 @@ export const useFullLocation = (inst: Handle<any, any>) => {
   return location.href
 }
 
-export const useNavigate = (inst: Handle<any, any>) => {
+export const useNavigate = (inst: Handle<unknown, unknown>) => {
   return inst.context.get(RouterProvider).navigate
 }
 
-export const useParams = <T extends Record<string, unknown>>(inst: Handle<any, any>) => {
+export const useParams = <T extends Record<string, unknown>>(inst: Handle<unknown, unknown>) => {
   const p = inst.context.get(RouterProvider).params
   if (!p) throw 'error params'
   return p.params as T
@@ -98,9 +98,12 @@ export function Link(handle: Handle<LinkProps>) {
   }
 }
 
-export type RouteType = Record<string, any>
+export type RouteType = Record<
+  string,
+  (handle: Handle<unknown, unknown>) => () => RemixNode
+>
 
-export const useRouter = (inst: Handle<any, any>, route: RouteType) => {
+export const useRouter = (inst: Handle<unknown, unknown>, route: RouteType) => {
   const location = useFullLocation(inst)
 
   for (const [pattern, content] of Object.entries(route)) {

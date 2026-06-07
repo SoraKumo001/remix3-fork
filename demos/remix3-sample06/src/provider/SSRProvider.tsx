@@ -18,7 +18,8 @@ export type SSRProps = {
 }
 
 export function SSRProvider(handle: Handle<{ storage?: SSRProps; children: RemixNode }, SSRProps>) {
-  return ({ storage, children }: { storage?: SSRProps; children: RemixNode }) => {
+  return () => {
+    const { storage, children } = handle.props
     if (isServer) {
       handle.context.set(
         storage ?? {
@@ -27,7 +28,7 @@ export function SSRProvider(handle: Handle<{ storage?: SSRProps; children: Remix
       )
     } else {
       const node = document.getElementById(SSR_DATA_NAME)
-      const states = JSON.parse(node?.innerText ?? '{}')
+      const states = JSON.parse(node?.innerText ?? '{}') as Record<string, unknown>
       handle.context.set(
         storage ?? {
           states: Object.fromEntries(
@@ -36,7 +37,7 @@ export function SSRProvider(handle: Handle<{ storage?: SSRProps; children: Remix
               {
                 state: 'finished',
                 promise: Promise.resolve(v),
-                value: v as any,
+                value: v,
                 children: undefined,
               },
             ]),
@@ -59,30 +60,22 @@ export function SSRData(
     SSRResult
   >,
 ) {
-  return ({
-    value,
-    state,
-    children,
-  }: {
-    value: unknown
-    state: 'idle' | 'loading' | 'finished'
-    children: RemixNode
-  }) => {
+  return () => {
+    const { value, state, children } = handle.props
     handle.context.set({ value, state })
     return children
   }
 }
 
-export function SSRFetch<T>(handle: Handle) {
-  return ({
-    name,
-    action,
-    children,
-  }: {
+export function SSRFetch<T>(
+  handle: Handle<{
     name: string
     action: () => Promise<T>
     children: RemixNode
-  }) => {
+  }>,
+) {
+  return () => {
+    const { name, action, children } = handle.props
     const context = handle.context.get(SSRProvider)
     if (!context) return undefined
     const frameName = `ssr:${name}`
