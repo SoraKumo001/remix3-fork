@@ -166,24 +166,41 @@ function AsyncExample(handle: Handle) {
 }
 ```
 
-## `handle.async(action)`
+## `handle.async(action, options?)`
 
-Helper to perform asynchronous tasks (e.g., data fetching) during component setup.
+Helper to perform asynchronous tasks (e.g., data fetching) during component setup and return a resource object for the resolved value.
 
 ```ts
-handle.async<T>(action: () => Promise<T>): Promise<T>
+handle.async<T>(
+  action: () => Promise<T>,
+  options?: {
+    key?: string
+    cache?: 'hydrate' | 'page' | 'none'
+    ttl?: number
+  },
+): Promise<AsyncResource<T>>
 ```
 
 When building full-stack applications with server-side rendering, performing asynchronous work during component setup can cause duplicate network requests if executed on both the server and client.
 
 `handle.async` solves this by orchestrating serialization:
+
 1. **Server Rendering (SSR)**: The asynchronous `action` is executed, and its resolved value is serialized into the HTML payload.
-2. **Client Hydration**: The hydration runtime extracts the serialized values and resolves `handle.async()` calls instantly with the cached data instead of re-running the action.
+2. **Client Hydration**: The hydration runtime extracts the serialized values and initializes `handle.async()` resources with the cached data instead of re-running the action.
+3. **Page Cache**: With `cache: 'page'`, the resolved value is kept in memory until the page reloads. A stable `key` lets the value survive component unmounts and remounts.
+
+Cache modes:
+
+- `page` - Default. Reuse hydration data and then keep the value in page memory until reload.
+- `hydrate` - Reuse hydration data for the initial client pass, but do not retain a page cache entry.
+- `none` - Always run the action.
+
+The returned resource has `value`, `status`, `pending`, `error`, `refresh()`, and `clear()`. `refresh()` always re-runs the action, so it can be used to request fresh data even when no explicit key was provided.
 
 ### Example
 
 ```tsx
-import { type Handle } from 'remix/ui'
+import { on, type Handle } from 'remix/ui'
 
 interface Weather {
   temperature: number
@@ -191,17 +208,37 @@ interface Weather {
 }
 
 async function WeatherWidget(handle: Handle<{ city: string }>) {
-  // Setup runs once, asynchronously
-  let weather = await handle.async<Weather>(async () => {
-    let res = await fetch(`/api/weather?city=${handle.props.city}`)
-    return res.json()
-  })
+  let weather = await handle.async<Weather>(
+    async () => {
+      let res = await fetch(`/api/weather?city=${handle.props.city}`)
+      return res.json()
+    },
+    {
+      key: `weather:${handle.props.city}`,
+      cache: 'page',
+    },
+  )
 
-  // Render function runs on every update
   return () => (
     <div>
       <h3>Weather in {handle.props.city}</h3>
-      <p>{weather.temperature}°C - {weather.condition}</p>
+      {weather.value && (
+        <p>
+          {weather.value.temperature}°C - {weather.value.condition}
+        </p>
+      )}
+      <button
+        type="button"
+        disabled={weather.pending}
+        mix={on('click', async () => {
+          let refresh = weather.refresh()
+          await handle.update()
+          await refresh
+          await handle.update()
+        })}
+      >
+        Refresh
+      </button>
     </div>
   )
 }

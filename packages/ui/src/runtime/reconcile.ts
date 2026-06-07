@@ -1034,6 +1034,7 @@ function insertFrame(
           frameInstances: runtime.frameInstances,
           namedFrames: runtime.namedFrames,
           componentCounters: runtime.componentCounters,
+          asyncCache: runtime.asyncCache,
         })
         runtime.frameInstances.set(start, instance)
       }
@@ -1080,6 +1081,7 @@ function insertFrame(
     frameInstances: runtime.frameInstances,
     namedFrames: runtime.namedFrames,
     componentCounters: runtime.componentCounters,
+    asyncCache: runtime.asyncCache,
   })
   node._frameInstance = instance
   runtime.frameInstances.set(start, instance)

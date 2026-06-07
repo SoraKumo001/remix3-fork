@@ -195,10 +195,10 @@ function Layout(handle: Handle<{ children: RemixNode }>) {
 
 ## Async Components & Data Fetching
 
-You can define your component setup function as an `async` function to perform asynchronous tasks (e.g., data fetching) using the `handle.async()` helper.
+You can define your component setup function as an `async` function to perform asynchronous tasks (e.g., data fetching) using the `handle.async()` helper. The helper returns an async resource object with the resolved value and refresh controls.
 
 ```tsx
-import type { Handle } from 'remix/ui'
+import { on, type Handle } from 'remix/ui'
 
 interface Weather {
   targetArea: string
@@ -207,21 +207,42 @@ interface Weather {
 }
 
 export default async function WeatherForecast(handle: Handle) {
-  const data = await handle.async<Weather>(() =>
-    fetch("https://api.example.com/weather").then((res) => res.json())
+  let weather = await handle.async<Weather>(
+    () => fetch('https://api.example.com/weather').then((res) => res.json()),
+    { key: 'weather:today', cache: 'page' },
   )
 
-  return () => (
-    <div>
-      <h1>{data.targetArea}</h1>
-      <p>{data.headlineText}</p>
-      <pre>{data.text}</pre>
-    </div>
-  )
+  return () => {
+    let data = weather.value
+
+    return (
+      <div>
+        <button
+          type="button"
+          disabled={weather.pending}
+          mix={on('click', async () => {
+            let refresh = weather.refresh()
+            await handle.update()
+            await refresh
+            await handle.update()
+          })}
+        >
+          Refresh
+        </button>
+        {data && (
+          <>
+            <h1>{data.targetArea}</h1>
+            <p>{data.headlineText}</p>
+            <pre>{data.text}</pre>
+          </>
+        )}
+      </div>
+    )
+  }
 }
 ```
 
-On the server, the asynchronous action is executed, and its resolved value is serialized and embedded in the HTML response. During client-side hydration, the component runtime automatically resolves `handle.async()` with the serialized data synchronously instead of re-running the fetch action, ensuring seamless hydration.
+On the server, the asynchronous action is executed, and its resolved value is serialized and embedded in the HTML response. During client-side hydration, the component runtime creates the resource from the serialized data instead of re-running the fetch action. With `cache: 'page'`, the resource is also kept in memory until the page reloads, so keyed resources can survive unmounts and remounts. Call `resource.refresh()` when the user explicitly asks for fresh data; this works even when no explicit key was provided.
 
 ## Cascade Layers
 

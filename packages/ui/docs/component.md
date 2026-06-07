@@ -207,16 +207,21 @@ Components can also be `async` functions that return `Promise<RenderFn>`. This i
 
 ```tsx
 async function UserProfile(handle: Handle<{ userId: string }>) {
-  // Setup runs asynchronously. handle.async ensures data is cached for hydration.
-  let user = await handle.async(async () => {
-    let res = await fetch(`/api/users/${handle.props.userId}`)
-    return res.json()
-  })
+  let user = await handle.async(
+    async () => {
+      let res = await fetch(`/api/users/${handle.props.userId}`)
+      return res.json()
+    },
+    {
+      key: `user:${handle.props.userId}`,
+      cache: 'page',
+    },
+  )
 
   return () => (
     <div>
-      <h2>{user.name}</h2>
-      <p>Email: {user.email}</p>
+      <h2>{user.value?.name}</h2>
+      <p>Email: {user.value?.email}</p>
     </div>
   )
 }
@@ -450,7 +455,7 @@ Components receive a `Handle` as their first argument with the following API:
 
 - **`handle.update()`** - Schedule an update and await completion to get an `AbortSignal`.
 - **`handle.queueTask(task)`** - Schedule a task to run after the next update. Useful for DOM operations that need to happen after rendering (e.g., moving focus, scrolling, measuring elements, etc.).
-- **`handle.async(action)`** - Helper to perform asynchronous tasks (e.g. data fetching) during setup. Enables server serialization and client-side reuse during hydration.
+- **`handle.async(action, options?)`** - Helper to perform asynchronous tasks (e.g. data fetching) during setup. Returns an async resource with the resolved value, page-lifetime cache behavior, and refresh controls.
 - **`addEventListeners(target, handle.signal, listeners)`** - Listen to an event target with automatic cleanup when the component disconnects.
 - **`handle.signal`** - An `AbortSignal` that's aborted when the component is disconnected. Useful for cleanup.
 - **`handle.id`** - Stable identifier per component instance.
@@ -574,22 +579,28 @@ function Form(handle: Handle) {
 }
 ```
 
-### `handle.async(action)`
+### `handle.async(action, options?)`
 
 Helper to perform asynchronous tasks (e.g. data fetching) during component setup.
 
-On the server during server-side rendering, the async action is executed and the resolved value is automatically serialized and sent down to the client. On the client during hydration, the serialized value is used instantly instead of re-executing the action, ensuring fast hydration and eliminating duplicate network requests.
+On the server during server-side rendering, the async action is executed and the resolved value is automatically serialized and sent down to the client. On the client during hydration, the serialized value initializes an async resource instead of re-executing the action, ensuring fast hydration and eliminating duplicate network requests.
+
+By default, async resources use `cache: 'page'`, which keeps the resolved value in memory until the page reloads. Pass a stable `key` when the resource should be reused after a component unmounts and later mounts again. Call `resource.refresh()` to re-run the action even when the key was generated automatically.
 
 ```tsx
 async function UserProfile(handle: Handle<{ userId: string }>) {
-  let user = await handle.async(async () => {
-    let res = await fetch(`/api/users/${handle.props.userId}`)
-    return res.json()
-  })
-
-  return () => (
-    <div>{user.name}</div>
+  let user = await handle.async(
+    async () => {
+      let res = await fetch(`/api/users/${handle.props.userId}`)
+      return res.json()
+    },
+    {
+      key: `user:${handle.props.userId}`,
+      cache: 'page',
+    },
   )
+
+  return () => <div>{user.value?.name}</div>
 }
 ```
 

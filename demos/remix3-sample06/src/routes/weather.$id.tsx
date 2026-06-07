@@ -1,4 +1,4 @@
-import { type Handle } from '@remix-run/ui'
+import { type Handle, on } from '@remix-run/ui'
 import { Link, useParams } from '../provider/RouterProvider'
 
 interface Weather {
@@ -11,19 +11,39 @@ interface Weather {
 
 export default async function WeatherDetail(handle: Handle) {
   const { id } = useParams(handle)
-  const value = await handle.async<Weather>(() =>
-    fetch(`https://www.jma.go.jp/bosai/forecast/data/overview_forecast/${id}.json`).then((v) =>
-      v.json(),
-    ),
+  const weather = await handle.async<Weather>(
+    () =>
+      fetch(`https://www.jma.go.jp/bosai/forecast/data/overview_forecast/${id}.json`).then((v) =>
+        v.json(),
+      ),
+    {
+      key: `jma:weather:${id}`,
+      cache: 'page',
+    },
   )
 
   return () => {
+    const value = weather.value
+
     return (
       <div className="p-2">
         <div className="mb-4">
           <Link to="/" className="text-blue-500 hover:underline">
             戻る
           </Link>
+          <button
+            type="button"
+            className="ml-4 rounded bg-blue-600 px-3 py-1 text-white"
+            disabled={weather.pending}
+            mix={on('click', async () => {
+              const refresh = weather.refresh()
+              await handle.update()
+              await refresh
+              await handle.update()
+            })}
+          >
+            {weather.pending ? '更新中...' : '更新'}
+          </button>
         </div>
         {value && (
           <div className="max-w-4xl">

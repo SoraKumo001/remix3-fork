@@ -8,6 +8,73 @@ import { createComponentErrorEvent } from './error-event.ts'
 export type Task = (signal: AbortSignal) => void
 
 /**
+ * Controls how an async resource is reused after it resolves.
+ */
+export type AsyncCacheMode = 'hydrate' | 'page' | 'none'
+
+/**
+ * Options for {@link Handle.async}.
+ */
+export interface AsyncOptions {
+  /**
+   * Stable cache key used to share the resource across component instances.
+   */
+  key?: string
+  /**
+   * Cache mode for the resolved value. Defaults to `page`.
+   */
+  cache?: AsyncCacheMode
+  /**
+   * Milliseconds before a `page` cache entry expires.
+   */
+  ttl?: number
+}
+
+/**
+ * Resolved handle for asynchronous component data.
+ */
+export interface AsyncResource<T> {
+  /**
+   * Cache key used by this resource. Auto-generated when no key is provided.
+   */
+  readonly key: string
+  /**
+   * Current lifecycle status for the resource value.
+   */
+  readonly status: 'idle' | 'pending' | 'resolved' | 'rejected'
+  /**
+   * Whether the resource is currently refreshing.
+   */
+  readonly pending: boolean
+  /**
+   * Last resolved value, or `undefined` before resolution or after clearing.
+   */
+  readonly value: T | undefined
+  /**
+   * Last refresh error, or `undefined` when the resource has not failed.
+   */
+  readonly error: unknown
+  /**
+   * Re-runs the resource action and updates the cached value.
+   *
+   * @returns The refreshed value.
+   */
+  refresh(): Promise<T>
+  /**
+   * Removes this resource from cache and clears its current value.
+   */
+  clear(): void
+}
+
+export interface AsyncCacheEntry<T = unknown> {
+  status: 'idle' | 'pending' | 'resolved' | 'rejected'
+  value: T | undefined
+  error: unknown
+  expiresAt?: number
+  promise?: Promise<T>
+}
+
+/**
  * Runtime handle passed to component setup functions.
  */
 export interface Handle<Props = Record<string, never>, ContextValue = NoContext> {
@@ -95,10 +162,15 @@ export interface Handle<Props = Record<string, never>, ContextValue = NoContext>
 
   /**
    * Helper to perform asynchronous tasks (e.g. data fetching) during setup.
-   * On the server, the action is executed and the resolved value is serialized.
-   * On the client during hydration, the serialized value is used instead of re-running the action.
+   * On the server, the action is executed and the resolved value is serialized. On the client
+   * during hydration, the serialized value initializes the returned resource instead of re-running
+   * the action.
+   *
+   * @param action Asynchronous work that resolves the resource value.
+   * @param options Cache key and reuse behavior for the resource.
+   * @returns A resource object with value, status, refresh, and clear controls.
    */
-  async<T>(action: () => Promise<T>): Promise<T>
+  async<T>(action: () => Promise<T>, options?: AsyncOptions): Promise<AsyncResource<T>>
 }
 
 /**
@@ -355,23 +427,61 @@ class ComponentRuntime<C = NoContext> implements ComponentHandle<C> {
 
   isRemoved = (): boolean => this.#removed
 
-  async = <T>(action: () => Promise<T>): Promise<T> => {
-    const index = this.#asyncCounter++
-    const key = `${this.#config.id}:async:${index}`
-    const runtime = this.frame.$runtime as { data?: { a?: Record<string, any> } } | undefined
-    const store = runtime?.data?.a
+  async = async <T>(
+    action: () => Promise<T>,
+    options: AsyncOptions = {},
+  ): Promise<AsyncResource<T>> => {
+    let index = this.#asyncCounter++
+    let key = options.key ? `async:${options.key}` : `${this.#config.id}:async:${index}`
+    let cache = options.cache ?? 'page'
+    let runtime = this.frame.$runtime as
+      | {
+          data?: { a?: Record<string, unknown> }
+          asyncCache?: Map<string, AsyncCacheEntry>
+        }
+      | undefined
+    let hydrationStore = runtime?.data?.a
+    let pageCache = runtime?.asyncCache
+    let entry =
+      cache === 'page' ? (pageCache?.get(key) as AsyncCacheEntry<T> | undefined) : undefined
 
-    if (store && key in store) {
-      return Promise.resolve(store[key] as T)
+    if (entry && !isAsyncCacheEntryExpired(entry)) {
+      return createAsyncResource(key, entry, action, cache, options, hydrationStore, pageCache)
     }
 
-    const promise = action()
-    promise.then((value) => {
-      if (store) {
-        store[key] = value
+    if (entry && isAsyncCacheEntryExpired(entry)) {
+      pageCache?.delete(key)
+      entry = undefined
+    }
+
+    if (cache !== 'none' && hydrationStore && key in hydrationStore) {
+      entry = createResolvedAsyncCacheEntry(hydrationStore[key] as T, options.ttl)
+      if (cache === 'page') {
+        pageCache?.set(key, entry)
       }
-    }).catch(() => {})
-    return promise
+      return createAsyncResource(key, entry, action, cache, options, hydrationStore, pageCache)
+    }
+
+    entry = {
+      status: 'pending',
+      value: undefined,
+      error: undefined,
+    }
+    if (cache === 'page') {
+      pageCache?.set(key, entry)
+    }
+
+    let resource = createAsyncResource(
+      key,
+      entry,
+      action,
+      cache,
+      options,
+      hydrationStore,
+      pageCache,
+    )
+    await resource.refresh()
+    return resource
   }
 
   #createHandle(): Handle<ElementProps, C> {
@@ -412,7 +522,7 @@ class ComponentRuntime<C = NoContext> implements ComponentHandle<C> {
       get signal() {
         return component.#config.signal ?? component.#connectedSignal()
       },
-      async: <T>(action: () => Promise<T>) => this.async(action),
+      async: <T>(action: () => Promise<T>, options?: AsyncOptions) => this.async(action, options),
     }
   }
 
@@ -437,6 +547,93 @@ class ComponentRuntime<C = NoContext> implements ComponentHandle<C> {
     let tasks = this.#tasks.splice(0, this.#tasks.length)
     return tasks.map((task) => () => task(signal!))
   }
+}
+
+function createAsyncResource<T>(
+  key: string,
+  entry: AsyncCacheEntry<T>,
+  action: () => Promise<T>,
+  cache: AsyncCacheMode,
+  options: AsyncOptions,
+  hydrationStore: Record<string, unknown> | undefined,
+  pageCache: Map<string, AsyncCacheEntry> | undefined,
+): AsyncResource<T> {
+  async function refresh(): Promise<T> {
+    if (entry.status === 'pending' && entry.promise) {
+      return entry.promise
+    }
+
+    entry.status = 'pending'
+    entry.error = undefined
+    let promise = action()
+    entry.promise = promise
+
+    try {
+      let value = await promise
+      entry.status = 'resolved'
+      entry.value = value
+      entry.error = undefined
+      entry.expiresAt = getAsyncCacheExpiresAt(options.ttl)
+      entry.promise = undefined
+      if (cache !== 'none' && hydrationStore) {
+        hydrationStore[key] = value
+      }
+      if (cache === 'page') {
+        pageCache?.set(key, entry)
+      }
+      return value
+    } catch (error) {
+      entry.status = 'rejected'
+      entry.error = error
+      entry.promise = undefined
+      throw error
+    }
+  }
+
+  return {
+    key,
+    get status() {
+      return entry.status
+    },
+    get pending() {
+      return entry.status === 'pending'
+    },
+    get value() {
+      return entry.value
+    },
+    get error() {
+      return entry.error
+    },
+    refresh,
+    clear() {
+      pageCache?.delete(key)
+      if (hydrationStore) {
+        delete hydrationStore[key]
+      }
+      entry.status = 'idle'
+      entry.value = undefined
+      entry.error = undefined
+      entry.expiresAt = undefined
+      entry.promise = undefined
+    },
+  }
+}
+
+function createResolvedAsyncCacheEntry<T>(value: T, ttl: number | undefined): AsyncCacheEntry<T> {
+  return {
+    status: 'resolved',
+    value,
+    error: undefined,
+    expiresAt: getAsyncCacheExpiresAt(ttl),
+  }
+}
+
+function getAsyncCacheExpiresAt(ttl: number | undefined): number | undefined {
+  return ttl === undefined ? undefined : Date.now() + ttl
+}
+
+function isAsyncCacheEntryExpired(entry: AsyncCacheEntry): boolean {
+  return entry.expiresAt !== undefined && Date.now() >= entry.expiresAt
 }
 
 function syncProps(target: ElementProps, next: ElementProps): void {

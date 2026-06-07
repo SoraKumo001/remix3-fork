@@ -28,6 +28,9 @@ export type {
 export { Fragment, Frame } from './runtime/component.ts'
 export type {
   Task,
+  AsyncCacheMode,
+  AsyncOptions,
+  AsyncResource,
   Handle,
   Context,
   FrameHandleEventMap,

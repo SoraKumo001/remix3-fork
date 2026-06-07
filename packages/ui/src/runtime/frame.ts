@@ -1,5 +1,10 @@
 import { jsx } from './jsx.ts'
-import { Frame, createFrameHandle, type FrameContent } from './component.ts'
+import {
+  Frame,
+  createFrameHandle,
+  type AsyncCacheEntry,
+  type FrameContent,
+} from './component.ts'
 import { createComponentErrorEvent, getComponentError } from './error-event.ts'
 import { invariant } from './invariant.ts'
 import type { RemixElement, RemixNode } from './jsx.ts'
@@ -113,6 +118,7 @@ export type FrameRuntime = {
   frameInstances: WeakMap<Comment, Frame>
   namedFrames: Map<string, FrameHandle>
   componentCounters: Map<string, number>
+  asyncCache: Map<string, AsyncCacheEntry>
 }
 
 export type FrameContext = {
@@ -130,6 +136,7 @@ export type FrameContext = {
   frameInstances: WeakMap<Comment, Frame>
   namedFrames: Map<string, FrameHandle>
   componentCounters: Map<string, number>
+  asyncCache: Map<string, AsyncCacheEntry>
   regionTailRef?: ChildNode | null
   regionParent?: ParentNode | null
   signal?: AbortSignal
@@ -152,6 +159,7 @@ type FrameInit = {
   frameInstances: WeakMap<Comment, Frame>
   namedFrames: Map<string, FrameHandle>
   componentCounters: Map<string, number>
+  asyncCache: Map<string, AsyncCacheEntry>
 }
 
 export type Frame = {
@@ -246,6 +254,7 @@ export function createFrame(root: FrameRoot, init: FrameInit): Frame {
     frameInstances: init.frameInstances,
     namedFrames: init.namedFrames,
     componentCounters: init.componentCounters,
+    asyncCache: init.asyncCache,
     regionTailRef: container.regionTailRef,
     regionParent: container.regionParent,
   }
@@ -617,6 +626,7 @@ export function createFrameRuntime(init: {
   frameInstances: WeakMap<Comment, Frame>
   namedFrames: Map<string, FrameHandle>
   componentCounters: Map<string, number>
+  asyncCache: Map<string, AsyncCacheEntry>
 }): FrameRuntime {
   return {
     topFrame: init.topFrame,
@@ -632,6 +642,7 @@ export function createFrameRuntime(init: {
     frameInstances: init.frameInstances,
     namedFrames: init.namedFrames,
     componentCounters: init.componentCounters,
+    asyncCache: init.asyncCache,
   }
 }
 
@@ -983,6 +994,7 @@ async function createSubFrames(
             frameInstances: context.frameInstances,
             namedFrames: context.namedFrames,
             componentCounters: context.componentCounters,
+            asyncCache: context.asyncCache,
           })
           context.frameInstances.set(node, subFrame)
         }

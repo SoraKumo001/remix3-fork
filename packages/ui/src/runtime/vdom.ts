@@ -302,6 +302,7 @@ function createRootFrameHandle(init: {
       frameInstances: new WeakMap(),
       namedFrames: new Map(),
       componentCounters: new Map(),
+      asyncCache: new Map(),
     },
   })
   let runtime = frame.$runtime as { topFrame?: FrameHandle } | undefined

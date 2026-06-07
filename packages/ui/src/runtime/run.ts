@@ -97,6 +97,7 @@ export function run(init: RunInit): AppRuntime {
     frameInstances: new WeakMap(),
     namedFrames,
     componentCounters: new Map(),
+    asyncCache: new Map(),
   })
 
   let appController = new AbortController()

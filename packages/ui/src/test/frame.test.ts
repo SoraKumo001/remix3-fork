@@ -72,6 +72,8 @@ describe('frame reloads', () => {
       moduleLoads: new Map(),
       frameInstances: new WeakMap(),
       namedFrames: new Map(),
+      componentCounters: new Map(),
+      asyncCache: new Map(),
     })
 
     try {

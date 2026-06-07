@@ -125,29 +125,46 @@ function Counter(handle: Handle) {
 
 Components can perform asynchronous setup by returning a `Promise` that resolves to a `RenderFn`. This is particularly useful for loading initial data before rendering the component content.
 
-To support server-side rendering and client-side hydration efficiently, use the `handle.async` helper inside your async setup:
+To support server-side rendering and client-side hydration efficiently, use the `handle.async` helper inside your async setup. It returns a resource object that exposes the value and refresh controls:
 
 ```tsx
-import { type Handle } from 'remix/ui'
+import { on, type Handle } from 'remix/ui'
 
 async function WeatherWidget(handle: Handle<{ city: string }>) {
-  // Execute async action. On the server, it runs and the result is serialized.
-  // On the client, hydration reuses the serialized value instead of re-fetching.
-  let weather = await handle.async(async () => {
-    let res = await fetch(`/api/weather?city=${handle.props.city}`)
-    return res.json()
-  })
+  let weather = await handle.async(
+    async () => {
+      let res = await fetch(`/api/weather?city=${handle.props.city}`)
+      return res.json()
+    },
+    {
+      key: `weather:${handle.props.city}`,
+      cache: 'page',
+    },
+  )
 
   return () => (
     <div>
       <h3>Weather in {handle.props.city}</h3>
-      <p>{weather.temperature}°C - {weather.condition}</p>
+      {weather.value && (
+        <p>
+          {weather.value.temperature}°C - {weather.value.condition}
+        </p>
+      )}
+      <button
+        type="button"
+        mix={on('click', async () => {
+          await weather.refresh()
+          await handle.update()
+        })}
+      >
+        Refresh
+      </button>
     </div>
   )
 }
 ```
 
-By returning a `Promise<RenderFn>`, the component stays suspended (rendering `null` or a fallback) until the setup completes. During hydration, using `handle.async` prevents duplicate network requests by reusing the server-resolved data.
+By returning a `Promise<RenderFn>`, the component stays suspended (rendering `null` or a fallback) until the setup completes. During hydration, using `handle.async` prevents duplicate network requests by reusing the server-resolved data. With `cache: 'page'`, keyed resources stay in memory until the page reloads.
 
 ## See Also
 

@@ -209,6 +209,108 @@ describe('hydration', () => {
   })
 
   describe('additional scenarios', () => {
+    it('hydrates async resources without rerunning the action', async () => {
+      let calls = 0
+
+      async function loadMessage() {
+        calls++
+        return `message ${calls}`
+      }
+
+      async function AsyncMessage(handle: Handle) {
+        let message = await handle.async(loadMessage)
+        return () => <span>{message.value}</span>
+      }
+
+      let html = await renderToString(<AsyncMessage />)
+      expect(calls).toBe(1)
+      container.innerHTML = html
+
+      let root = createRoot(container)
+      root.render(<AsyncMessage />)
+      await settleAsyncRoot(root)
+
+      expect(calls).toBe(1)
+      expect(container.textContent).toBe('message 1')
+    })
+
+    it('keeps page async resources after a component unmounts', async () => {
+      let calls = 0
+      let show = true
+
+      async function loadMessage() {
+        calls++
+        return `message ${calls}`
+      }
+
+      async function AsyncMessage(handle: Handle) {
+        let message = await handle.async(loadMessage, { key: 'message', cache: 'page' })
+        return () => <span>{message.value}</span>
+      }
+
+      function App() {
+        return () => (show ? <AsyncMessage /> : <div>hidden</div>)
+      }
+
+      let root = createRoot(container)
+      root.render(<App />)
+      await settleAsyncRoot(root)
+
+      expect(calls).toBe(1)
+      expect(container.textContent).toBe('message 1')
+
+      show = false
+      root.render(<App />)
+      root.flush()
+
+      expect(container.textContent).toBe('hidden')
+
+      show = true
+      root.render(<App />)
+      await settleAsyncRoot(root)
+
+      expect(calls).toBe(1)
+      expect(container.textContent).toBe('message 1')
+    })
+
+    it('refreshes async resources without an explicit key', async () => {
+      let calls = 0
+
+      async function loadMessage() {
+        calls++
+        return `message ${calls}`
+      }
+
+      async function AsyncMessage(handle: Handle) {
+        let message = await handle.async(loadMessage)
+        return () => (
+          <button
+            type="button"
+            mix={on('click', async () => {
+              await message.refresh()
+              await handle.update()
+            })}
+          >
+            {message.value}
+          </button>
+        )
+      }
+
+      let root = createRoot(container)
+      root.render(<AsyncMessage />)
+      await settleAsyncRoot(root)
+
+      let button = container.querySelector('button')
+      invariant(button)
+      expect(button.textContent).toBe('message 1')
+
+      button.click()
+      await settleAsyncRoot(root)
+
+      expect(calls).toBe(2)
+      expect(button.textContent).toBe('message 2')
+    })
+
     it('hydrates context across component boundaries', async () => {
       function Provider(handle: Handle<{ children?: any }, { value: string }>) {
         handle.context.set({ value: 'from context' })
@@ -498,3 +600,10 @@ describe('hydration', () => {
     })
   })
 })
+
+async function settleAsyncRoot(root: ReturnType<typeof createRoot>) {
+  for (let i = 0; i < 4; i++) {
+    await Promise.resolve()
+    root.flush()
+  }
+}
