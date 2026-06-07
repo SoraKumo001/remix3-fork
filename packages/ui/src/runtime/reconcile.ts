@@ -418,7 +418,7 @@ export function diffVNodes(
   }
 
   if (curr.type !== next.type) {
-    replace(curr, next, domParent, frame, scheduler, styles, vParent, rootTarget, anchor)
+    replace(curr, next, domParent, frame, scheduler, styles, vParent, rootTarget, anchor, rootCursor)
     return rootCursor
   }
 
@@ -475,6 +475,7 @@ function replace(
   vParent: VNode,
   rootTarget: EventTarget,
   anchor?: Node,
+  cursor?: Node | null,
 ) {
   let currAnchor = findFirstDomAnchor(curr)
   if (currAnchor && currAnchor.parentNode === domParent) {
@@ -482,7 +483,7 @@ function replace(
     domParent.insertBefore(replacementAnchor, currAnchor)
     try {
       remove(curr, domParent, scheduler, styles)
-      insert(next, domParent, frame, scheduler, styles, vParent, rootTarget, replacementAnchor)
+      insert(next, domParent, frame, scheduler, styles, vParent, rootTarget, replacementAnchor, cursor)
     } finally {
       replacementAnchor.parentNode?.removeChild(replacementAnchor)
     }
@@ -491,7 +492,7 @@ function replace(
 
   let replacementAnchor = findNextSiblingDomAnchor(curr) ?? anchor
   remove(curr, domParent, scheduler, styles)
-  insert(next, domParent, frame, scheduler, styles, vParent, rootTarget, replacementAnchor)
+  insert(next, domParent, frame, scheduler, styles, vParent, rootTarget, replacementAnchor, cursor)
 }
 
 function diffHost(
