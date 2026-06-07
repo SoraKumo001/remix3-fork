@@ -125,6 +125,11 @@ type Segment =
       content: Segment | null
       pending?: Promise<void>
     }
+  | {
+      kind: 'async-component'
+      content: Segment | null
+      pending: Promise<void>
+    }
 
 const TEXTAREA_VALUE_PROPS = new Set(['value', 'defaultValue'])
 const INPUT_DEFAULT_PROPS = new Set(['defaultValue', 'defaultChecked'])
@@ -234,7 +239,7 @@ export function renderToStream(
         let root = buildSegment(node, context, rootFrameState)
         await resolveBlocking(root)
         if (closeIfCancelled(controller, context)) return
-        await resolveClientEntries(context, options?.resolveClientEntry)
+        await resolveClientEntries(context, options?.resolveClientEntry, rootFrameState)
         if (closeIfCancelled(controller, context)) return
         validateClientEntriesForHydration(context)
         let html = serializeSegment(root)
@@ -881,6 +886,31 @@ function buildComponentSegment(
   let [renderedNode] = handle.render(props)
   let childContext = { ...context, parentVNode: vnode }
 
+  if (handle.initPromise) {
+    let pendingResolve: () => void = () => {}
+    let pending = new Promise<void>((resolve) => {
+      pendingResolve = resolve
+    })
+
+    let seg = {
+      kind: 'async-component' as const,
+      content: null as Segment | null,
+      pending,
+    }
+
+    handle.initPromise
+      .then(async (resolvedRenderFn) => {
+        let resolvedNode = resolvedRenderFn()
+        seg.content = buildSegment(resolvedNode, childContext, frameState)
+        pendingResolve()
+      })
+      .catch(() => {
+        pendingResolve()
+      })
+
+    return seg
+  }
+
   let rendered = buildSegment(renderedNode, childContext, frameState)
   if (childContext.flushKind === 'document') {
     context.flushKind = 'document'
@@ -1003,11 +1033,10 @@ function buildEntrySegment(
   let rendered = buildComponentSegment(type, props, context, instanceId, frameState)
 
   // Store hydration data in context for aggregation
-  let replacer = createHydrationPropsReplacer(context, frameState)
   context.unresolvedHydrationData.set(instanceId, {
     entryId: type.$entryId,
     component: type,
-    props: JSON.parse(JSON.stringify(props, replacer)),
+    props,
   })
 
   let start = staticSeg(`<!-- rmx:h:${instanceId} -->`)
@@ -1043,12 +1072,121 @@ function resolveDefaultClientEntry(
   )
 }
 
+async function unwrapNodeAsync(
+  node: RemixNode,
+  context: RenderContext,
+  frameState: SsrFrameState,
+): Promise<unknown> {
+  if (node === null || node === undefined || typeof node === 'boolean') return node
+  if (typeof node === 'string' || typeof node === 'number' || typeof node === 'bigint') {
+    return node
+  }
+  if (Array.isArray(node)) {
+    return Promise.all(node.map((child) => unwrapNodeAsync(child, context, frameState)))
+  }
+  if (isRemixElement(node)) {
+    return unwrapElementAsync(node, context, frameState)
+  }
+  return node
+}
+
+async function unwrapElementAsync(
+  element: RemixElement,
+  context: RenderContext,
+  frameState: SsrFrameState,
+): Promise<unknown> {
+  let type = element.type
+  let props = element.props
+
+  if (type === Frame) {
+    let transformedProps = await transformPropsAsync(props, context, frameState)
+    return {
+      $rmxFrame: true,
+      props: transformedProps,
+      key: element.key,
+    }
+  }
+
+  if (typeof type === 'string') {
+    let transformedProps = await transformPropsAsync(props, context, frameState)
+    return { $rmx: true, type, props: transformedProps }
+  }
+
+  if (typeof type === 'function') {
+    let vnode = createVNode(type, props)
+    if (context.parentVNode) {
+      vnode._parent = context.parentVNode
+    }
+
+    let handle = createComponent({
+      id: 'SERIALIZED',
+      type: type,
+      frame: frameState.frame,
+      signal: ssrSignal,
+      getContext(providerType) {
+        let current = vnode._parent
+        while (current) {
+          if (current.type === providerType) {
+            let providerHandle = current._handle
+            if (providerHandle) {
+              return providerHandle.getContextValue()
+            }
+          }
+          current = current._parent
+        }
+        return undefined
+      },
+      getFrameByName() {
+        return undefined
+      },
+      getTopFrame() {
+        return frameState.topFrame
+      },
+    })
+
+    vnode._handle = handle
+    let [renderedNode] = handle.render(props)
+    if (handle.initPromise) {
+      let resolvedRenderFn = await handle.initPromise
+      let resolvedNode = resolvedRenderFn()
+      return unwrapNodeAsync(resolvedNode, context, frameState)
+    }
+    return unwrapNodeAsync(renderedNode, context, frameState)
+  }
+
+  return null
+}
+
+async function transformPropsAsync(
+  input: ElementProps,
+  context: RenderContext,
+  frameState: SsrFrameState,
+): Promise<Record<string, unknown>> {
+  let out: Record<string, unknown> = {}
+  for (let key in input) {
+    let value = input[key]
+    if (key === 'children') {
+      out[key] = await unwrapNodeAsync(value, context, frameState)
+    } else {
+      if (isRemixElement(value)) {
+        out[key] = await unwrapNodeAsync(value, context, frameState)
+      } else if (Array.isArray(value)) {
+        out[key] = await Promise.all(value.map((v) => unwrapNodeAsync(v, context, frameState)))
+      } else {
+        out[key] = value
+      }
+    }
+  }
+  return out
+}
+
 async function resolveClientEntries(
   context: RenderContext,
   resolveClientEntry?: (
     entryId: string,
     component: EntryComponent,
   ) => Promise<ResolvedClientEntry> | ResolvedClientEntry,
+  frameState?: SsrFrameState,
 ): Promise<void> {
   if (context.unresolvedHydrationData.size === 0) return
 
@@ -1065,10 +1203,14 @@ async function resolveClientEntries(
       resolvedEntries.set(entryId, resolvedEntry)
     }
 
+    let unwrappedProps = frameState
+      ? await transformPropsAsync(props, context, frameState)
+      : props
+
     context.hydrationData.set(hydrationId, {
       exportName: resolvedEntry.exportName,
       moduleUrl: resolvedEntry.href,
-      props,
+      props: unwrappedProps as Record<string, unknown>,
     })
   }
 
@@ -1114,6 +1256,11 @@ async function resolveBlocking(segment: Segment): Promise<void> {
     if (segment.content) await resolveBlocking(segment.content)
     return
   }
+  if (segment.kind === 'async-component') {
+    await segment.pending
+    if (segment.content) await resolveBlocking(segment.content)
+    return
+  }
   if (segment.kind === 'composite') {
     for (let part of segment.parts) {
       await resolveBlocking(part)
@@ -1125,6 +1272,9 @@ async function resolveBlocking(segment: Segment): Promise<void> {
 function serializeSegment(seg: Segment): string {
   if (seg.kind === 'static') return seg.html
   if (seg.kind === 'composite') return seg.parts.map(serializeSegment).join('')
+  if (seg.kind === 'async-component') {
+    return seg.content ? serializeSegment(seg.content) : ''
+  }
   // frame
   let inner = seg.content ? serializeSegment(seg.content) : ''
   let start = `<!-- rmx:f:${seg.frameId} -->`

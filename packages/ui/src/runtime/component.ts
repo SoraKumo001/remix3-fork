@@ -1,5 +1,6 @@
 import type { ElementProps, ElementType, RemixNode, Renderable } from './jsx.ts'
 import { TypedEventTarget } from './typed-event-target.ts'
+import { createComponentErrorEvent } from './error-event.ts'
 
 /**
  * Task queued to run after a component update completes.
@@ -104,7 +105,7 @@ export type NoContext = Record<string, never>
  */
 export type Component<Props = ElementProps, ContextValue = NoContext> = (
   handle: Handle<Props, ContextValue>,
-) => RenderFn
+) => RenderFn | Promise<RenderFn>
 
 /**
  * Infers the context provided by a component or handle-compatible function.
@@ -176,7 +177,7 @@ export interface FrameProps {
  */
 export type ComponentFn<Props = Record<string, never>, ContextValue = NoContext> = (
   handle: Handle<Props, ContextValue>,
-) => RenderFn
+) => RenderFn | Promise<RenderFn>
 
 /**
  * Zero-argument render function returned by a component factory.
@@ -230,6 +231,7 @@ export interface ComponentHandle<C = NoContext> {
   setScheduleUpdate(nextScheduleUpdate: () => void): void
   getContextValue(): C | undefined
   isRemoved(): boolean
+  initPromise?: Promise<RenderFn>
 }
 
 /**
@@ -244,6 +246,7 @@ export function createComponent<C = NoContext>(config: ComponentConfig): Compone
 
 class ComponentRuntime<C = NoContext> implements ComponentHandle<C> {
   frame: FrameHandle
+  initPromise?: Promise<RenderFn>
 
   #config: ComponentConfig
   #connectedController: AbortController | undefined
@@ -277,6 +280,30 @@ class ComponentRuntime<C = NoContext> implements ComponentHandle<C> {
 
     if (renderFn === undefined) {
       let result = this.#config.type(this.#handle)
+
+      if (result instanceof Promise) {
+        this.initPromise = result
+        result
+          .then((resolvedRenderFn) => {
+            if (typeof resolvedRenderFn !== 'function') {
+              let name = this.#config.type.name || 'Anonymous'
+              throw new Error(
+                `${name} must return a render function, received ${typeof resolvedRenderFn}`,
+              )
+            }
+            if (this.#removed) return
+            this.#renderFn = resolvedRenderFn
+            this.#scheduleUpdate()
+          })
+          .catch((error) => {
+            if (this.#removed) return
+            let runtime = this.frame.$runtime as { errorTarget?: EventTarget } | undefined
+            let errorTarget = runtime?.errorTarget ?? this.frame
+            errorTarget.dispatchEvent(createComponentErrorEvent(error))
+          })
+
+        return [null, this.#dequeueTasks()]
+      }
 
       if (typeof result !== 'function') {
         let name = this.#config.type.name || 'Anonymous'

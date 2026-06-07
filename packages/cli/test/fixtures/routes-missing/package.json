@@ -1,8 +1,0 @@
-{
-  "name": "routes-missing-fixture",
-  "private": true,
-  "type": "module",
-  "dependencies": {
-    "remix": "workspace:*"
-  }
-}

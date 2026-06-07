@@ -3,6 +3,7 @@ import { afterEach, describe, it } from '@remix-run/test'
 import { createRoot } from '../runtime/vdom.ts'
 import { invariant } from '../runtime/invariant.ts'
 import type { Handle } from '../runtime/component.ts'
+import { getComponentError } from '../runtime/error-event.ts'
 
 describe('vnode rendering', () => {
   afterEach(() => {
@@ -218,6 +219,61 @@ describe('vnode rendering', () => {
       expect(document.head.querySelector('meta[name="dispose-description"]')).toBeNull()
       expect(document.head.querySelector('script[type="application/ld+json"]')).toBeNull()
       expect(container.innerHTML).toBe('')
+    })
+
+    it('renders an async component', async () => {
+      let container = document.createElement('div')
+      let resolveComponent: () => void = () => {}
+      let promise = new Promise<any>((resolve) => {
+        resolveComponent = () => resolve(() => <div>Loaded!</div>)
+      })
+
+      function AsyncApp() {
+        return promise
+      }
+
+      let root = createRoot(container)
+      root.render(<AsyncApp />)
+      expect(container.innerHTML).toBe('')
+
+      resolveComponent()
+      await promise
+      await Promise.resolve()
+      root.flush()
+
+      expect(container.innerHTML).toBe('<div>Loaded!</div>')
+    })
+
+    it('dispatches an error event when async component fails', async () => {
+      let container = document.createElement('div')
+      let rejectComponent: (err: any) => void = () => {}
+      let promise = new Promise<any>((_, reject) => {
+        rejectComponent = reject
+      })
+
+      function FailAsyncApp() {
+        return promise
+      }
+
+      let root = createRoot(container)
+      let errors: any[] = []
+      root.addEventListener('error', (event) => {
+        errors.push(getComponentError(event))
+      })
+
+      root.render(<FailAsyncApp />)
+      expect(container.innerHTML).toBe('')
+
+      rejectComponent(new Error('Async load failed'))
+      try {
+        await promise
+      } catch {}
+
+      await Promise.resolve()
+      root.flush()
+
+      expect(errors).toHaveLength(1)
+      expect(errors[0].message).toBe('Async load failed')
     })
   })
 })

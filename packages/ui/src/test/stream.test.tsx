@@ -321,6 +321,59 @@ describe('stream', () => {
       })
       expect(html).toBe('<div>https://example.com/dashboard</div>')
     })
+
+    it('renders async components, resolving blocking segments before completing', async () => {
+      let resolveComponent: () => void = () => {}
+      let promise = new Promise<any>((resolve) => {
+        resolveComponent = () => resolve(() => <div>Loaded Async!</div>)
+      })
+
+      function AsyncApp() {
+        return promise
+      }
+
+      let stream = renderToStream(<AsyncApp />)
+      let drainPromise = drain(stream)
+
+      resolveComponent()
+      let html = await drainPromise
+      expect(html).toBe('<div>Loaded Async!</div>')
+    })
+
+    it('serializes props containing async components for hydration', async () => {
+      let resolveComponent: () => void = () => {}
+      let promise = new Promise<any>((resolve) => {
+        resolveComponent = () => resolve(() => <span>Async Inside Hydration</span>)
+      })
+
+      function AsyncChild() {
+        return promise
+      }
+
+      let Entry = clientEntry('/js/entry.js', (handle: Handle<{ child: RemixNode }>) => {
+        return () => <div>{handle.props.child}</div>
+      })
+
+      let stream = renderToStream(<Entry child={<AsyncChild />} />, {
+        resolveClientEntry: () => ({ href: '/js/entry.js', exportName: 'Entry' }),
+      })
+      let drainPromise = drain(stream)
+
+      resolveComponent()
+      let html = await drainPromise
+
+      expect(html).toContain('<span>Async Inside Hydration</span>')
+
+      let data = parseRmxDataFromHtml(html)
+      let [hydrationId, hydrationRecord] = getSingleEntry(data.h)
+      expect(hydrationRecord.exportName).toBe('Entry')
+      expect(hydrationRecord.moduleUrl).toBe('/js/entry.js')
+      expect(hydrationRecord.props.child).toEqual({
+        $rmx: true,
+        type: 'span',
+        props: { children: 'Async Inside Hydration' },
+      })
+    })
   })
 
   describe('special props', () => {

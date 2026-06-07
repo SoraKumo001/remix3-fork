@@ -1,8 +1,0 @@
-{
-  "name": "doctor-env-missing-remix-dependency-fixture",
-  "private": true,
-  "type": "module",
-  "engines": {
-    "node": ">=24.3.0"
-  }
-}

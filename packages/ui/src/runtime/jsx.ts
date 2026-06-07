@@ -116,7 +116,7 @@ declare global {
       // host elements
       | keyof IntrinsicElements
       // Factory component
-      | ((handle: Handle<any, any>) => RenderFn)
+      | ((handle: Handle<any, any>) => RenderFn | Promise<RenderFn>)
       // Mixin element used internally by mixin render callbacks
       | MixinElementType
 
@@ -130,9 +130,9 @@ declare global {
 
     type LibraryManagedAttributes<component, props> = component extends MixinElementType
       ? ExpandMixProp<Parameters<ReturnType<component>>[0]>
-      : component extends () => RenderFn
+      : component extends () => RenderFn | Promise<RenderFn>
         ? ExpandMixProp<Record<string, never>>
-        : component extends (handle: Handle<infer P, any>) => RenderFn
+        : component extends (handle: Handle<infer P, any>) => RenderFn | Promise<RenderFn>
           ? // It's a ComponentFactory - infer props from the handle
             ExpandMixProp<P>
           : // Otherwise use props as-is (simple function component)

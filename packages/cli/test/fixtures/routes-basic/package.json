@@ -1,8 +1,0 @@
-{
-  "name": "routes-basic-fixture",
-  "private": true,
-  "type": "module",
-  "dependencies": {
-    "remix": "workspace:*"
-  }
-}

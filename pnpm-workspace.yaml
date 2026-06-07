@@ -6,26 +6,11 @@ catalog:
   typescript-language-server: ^5.1.3
 
 packages:
-  - demos/*
-  - docs
-  - docs/src/prerender/bench
-  - packages/*
-  - packages/*/demo
-  - packages/assets/bench
-  - packages/cli/test/fixtures/*
-  - packages/fetch-router/demos/*
-  - packages/form-data-parser/demos/*
-  - packages/ui/bench
-  - packages/ui/bench/frameworks/*
-  - packages/lazy-file/scripts
-  - packages/multipart-parser/bench
-  - packages/multipart-parser/demos/*
-  - packages/node-fetch-server/bench
-  - packages/node-fetch-server/demos/*
-  - packages/route-pattern/bench
-  - packages/static-middleware/demos/*
-  - packages/tar-parser/bench
-  - template
+  - packages/ui
+  - packages/assert
+  - packages/test
+  - packages/node-tsx
+  - packages/terminal
   - scripts
 
 shellEmulator: true
