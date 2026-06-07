@@ -122,6 +122,35 @@ describe('ref mixin', () => {
 
     expect(events).toEqual(['insert', 'task'])
   })
+
+  it('preserves ref-managed children when an empty host updates', () => {
+    let container = document.createElement('div')
+    let root = createRoot(container)
+    let count = 0
+
+    function Example() {
+      return () => (
+        <div
+          data-count={count}
+          mix={ref((node) => (node.innerHTML = '<strong>managed</strong>'))}
+        />
+      )
+    }
+
+    root.render(<Example />)
+    root.flush()
+
+    let div = container.querySelector('div')
+    invariant(div)
+    expect(div.innerHTML).toBe('<strong>managed</strong>')
+
+    count++
+    root.render(<Example />)
+    root.flush()
+
+    expect(div.getAttribute('data-count')).toBe('1')
+    expect(div.innerHTML).toBe('<strong>managed</strong>')
+  })
 })
 
 const _infersNodeType = (

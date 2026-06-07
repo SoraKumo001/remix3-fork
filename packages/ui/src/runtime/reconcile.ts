@@ -418,7 +418,18 @@ export function diffVNodes(
   }
 
   if (curr.type !== next.type) {
-    replace(curr, next, domParent, frame, scheduler, styles, vParent, rootTarget, anchor, rootCursor)
+    replace(
+      curr,
+      next,
+      domParent,
+      frame,
+      scheduler,
+      styles,
+      vParent,
+      rootTarget,
+      anchor,
+      rootCursor,
+    )
     return rootCursor
   }
 
@@ -483,7 +494,17 @@ function replace(
     domParent.insertBefore(replacementAnchor, currAnchor)
     try {
       remove(curr, domParent, scheduler, styles)
-      insert(next, domParent, frame, scheduler, styles, vParent, rootTarget, replacementAnchor, cursor)
+      insert(
+        next,
+        domParent,
+        frame,
+        scheduler,
+        styles,
+        vParent,
+        rootTarget,
+        replacementAnchor,
+        cursor,
+      )
     } finally {
       replacementAnchor.parentNode?.removeChild(replacementAnchor)
     }
@@ -1563,6 +1584,7 @@ function diffChildren(
 
   if (
     next.length === 0 &&
+    curr.length > 0 &&
     anchor === undefined &&
     !parentUsesInnerHTML(vParent) &&
     canBulkClearChildren(curr)

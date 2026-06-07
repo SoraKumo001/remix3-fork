@@ -273,6 +273,37 @@ describe('hydration', () => {
       expect(container.textContent).toBe('message 1')
     })
 
+    it('renders pending async resources before client actions resolve', async () => {
+      let calls = 0
+      let resolveMessage: (value: string) => void = () => {}
+      let messagePromise = new Promise<string>((resolve) => {
+        resolveMessage = resolve
+      })
+
+      async function loadMessage() {
+        calls++
+        return messagePromise
+      }
+
+      async function AsyncMessage(handle: Handle) {
+        let message = await handle.async(loadMessage, { key: 'client-pending', cache: 'page' })
+        return () => <span>{message.pending ? 'loading' : message.value}</span>
+      }
+
+      let root = createRoot(container)
+      root.render(<AsyncMessage />)
+      await settleAsyncRoot(root)
+
+      expect(calls).toBe(1)
+      expect(container.textContent).toBe('loading')
+
+      resolveMessage('loaded')
+      await settleAsyncRoot(root)
+
+      expect(calls).toBe(1)
+      expect(container.textContent).toBe('loaded')
+    })
+
     it('refreshes async resources without an explicit key', async () => {
       let calls = 0
 

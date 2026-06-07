@@ -583,7 +583,7 @@ function Form(handle: Handle) {
 
 Helper to perform asynchronous tasks (e.g. data fetching) during component setup.
 
-On the server during server-side rendering, the async action is executed and the resolved value is automatically serialized and sent down to the client. On the client during hydration, the serialized value initializes an async resource instead of re-executing the action, ensuring fast hydration and eliminating duplicate network requests.
+On the server during server-side rendering, `await handle.async()` executes the action and the resolved value is automatically serialized and sent down to the client. On the client during hydration, the serialized value initializes an async resource instead of re-executing the action, ensuring fast hydration and eliminating duplicate network requests. During client-side navigation, `handle.async()` returns the resource before the action resolves so components can show `resource.pending` UI.
 
 By default, async resources use `cache: 'page'`, which keeps the resolved value in memory until the page reloads. Pass a stable `key` when the resource should be reused after a component unmounts and later mounts again. Call `resource.refresh()` to re-run the action even when the key was generated automatically.
 

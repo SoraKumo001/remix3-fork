@@ -125,7 +125,7 @@ function Counter(handle: Handle) {
 
 Components can perform asynchronous setup by returning a `Promise` that resolves to a `RenderFn`. This is particularly useful for loading initial data before rendering the component content.
 
-To support server-side rendering and client-side hydration efficiently, use the `handle.async` helper inside your async setup. It returns a resource object that exposes the value and refresh controls:
+To support server-side rendering, client-side hydration, and client-side pending UI efficiently, use the `handle.async` helper inside setup. It returns a resource object that exposes the value, pending state, and refresh controls:
 
 ```tsx
 import { on, type Handle } from 'remix/ui'
@@ -164,7 +164,7 @@ async function WeatherWidget(handle: Handle<{ city: string }>) {
 }
 ```
 
-By returning a `Promise<RenderFn>`, the component stays suspended (rendering `null` or a fallback) until the setup completes. During hydration, using `handle.async` prevents duplicate network requests by reusing the server-resolved data. With `cache: 'page'`, keyed resources stay in memory until the page reloads.
+During server rendering, `await handle.async()` blocks until the action resolves so the value can be serialized into the HTML. In the browser, `handle.async()` returns the resource before the action resolves, which lets the render function show `resource.pending` UI during client-side navigations. During hydration, using `handle.async` prevents duplicate network requests by reusing the server-resolved data. With `cache: 'page'`, keyed resources stay in memory until the page reloads.
 
 ## See Also
 

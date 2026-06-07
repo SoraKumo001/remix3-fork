@@ -178,16 +178,17 @@ handle.async<T>(
     cache?: 'hydrate' | 'page' | 'none'
     ttl?: number
   },
-): Promise<AsyncResource<T>>
+): AsyncResource<T>
 ```
 
 When building full-stack applications with server-side rendering, performing asynchronous work during component setup can cause duplicate network requests if executed on both the server and client.
 
 `handle.async` solves this by orchestrating serialization:
 
-1. **Server Rendering (SSR)**: The asynchronous `action` is executed, and its resolved value is serialized into the HTML payload.
+1. **Server Rendering (SSR)**: `await handle.async()` waits for the asynchronous `action`, and its resolved value is serialized into the HTML payload.
 2. **Client Hydration**: The hydration runtime extracts the serialized values and initializes `handle.async()` resources with the cached data instead of re-running the action.
-3. **Page Cache**: With `cache: 'page'`, the resolved value is kept in memory until the page reloads. A stable `key` lets the value survive component unmounts and remounts.
+3. **Client Navigation**: In the browser, `handle.async()` returns the resource before the action resolves so components can render `resource.pending` UI while data is loading.
+4. **Page Cache**: With `cache: 'page'`, the resolved value is kept in memory until the page reloads. A stable `key` lets the value survive component unmounts and remounts.
 
 Cache modes:
 

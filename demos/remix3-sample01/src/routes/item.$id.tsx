@@ -1,4 +1,4 @@
-import { type Handle, on, ref } from '@remix-run/ui'
+import { type Handle, on } from '@remix-run/ui'
 import { Link, useParams } from '../provider/RouterProvider'
 
 interface Story {
@@ -42,25 +42,25 @@ function formatTime(unixTime: number): string {
 
 export default async function ItemDetailRoute(handle: Handle) {
   const { id } = useParams(handle)
-  
+
   const detail = await handle.async<ItemDetail>(
     async () => {
       const storyRes = await fetch(`https://hacker-news.firebaseio.com/v0/item/${id}.json`)
       if (!storyRes.ok) throw new Error('Failed to fetch story details')
-      const story = await storyRes.json() as Story
-      
+      const story = (await storyRes.json()) as Story
+
       const kids = story.kids || []
       const commentPromises = kids.slice(0, 15).map(async (kidId) => {
         const commentRes = await fetch(`https://hacker-news.firebaseio.com/v0/item/${kidId}.json`)
         if (!commentRes.ok) return null
         return commentRes.json() as Promise<HNComment>
       })
-      
+
       const commentsRaw = await Promise.all(commentPromises)
       const comments = commentsRaw.filter(
-        (c): c is HNComment => c !== null && c.type === 'comment' && !c.deleted && !c.dead
+        (c): c is HNComment => c !== null && c.type === 'comment' && !c.deleted && !c.dead,
       )
-      
+
       return { story, comments }
     },
     {
@@ -80,7 +80,13 @@ export default async function ItemDetailRoute(handle: Handle) {
             to="/"
             className="inline-flex items-center gap-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 px-3.5 py-1.5 text-sm font-medium text-slate-200 transition-all active:scale-[0.98]"
           >
-            <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <svg
+              className="w-4 h-4 text-slate-400"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
               <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
             </svg>
             トップに戻る
@@ -99,16 +105,56 @@ export default async function ItemDetailRoute(handle: Handle) {
           >
             {detail.pending ? (
               <>
-                <svg className="animate-spin h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                <svg
+                  className="animate-spin h-4 w-4 text-slate-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
                 </svg>
                 更新中...
               </>
             ) : (
               <>
-                <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89H18" />
+                <svg
+                  className="w-4 h-4 text-slate-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M16.023 9.348h4.992V4.356"
+                  />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M21.015 9.348A8.25 8.25 0 006.75 5.64L3.75 8.64"
+                  />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M7.977 14.652H2.985v4.992"
+                  />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M2.985 14.652A8.25 8.25 0 0017.25 18.36l3-3"
+                  />
                 </svg>
                 更新する
               </>
@@ -143,8 +189,18 @@ export default async function ItemDetailRoute(handle: Handle) {
                       className="hover:text-amber-400 flex items-center gap-1.5 flex-wrap inline-flex"
                     >
                       {value.story.title}
-                      <svg className="w-4 h-4 text-slate-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      <svg
+                        className="w-4 h-4 text-slate-500 shrink-0"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                        />
                       </svg>
                     </a>
                   ) : (
@@ -171,9 +227,7 @@ export default async function ItemDetailRoute(handle: Handle) {
                 {value.story.text && (
                   <div
                     className="mt-6 text-sm text-slate-300 leading-relaxed border-t border-slate-800/65 pt-5 comment-text"
-                    mix={ref((el) => {
-                      el.innerHTML = value.story.text || ''
-                    })}
+                    innerHTML={value.story.text}
                   />
                 )}
               </article>
@@ -181,8 +235,18 @@ export default async function ItemDetailRoute(handle: Handle) {
               {/* Comments Section */}
               <section className="space-y-6">
                 <h2 className="text-lg font-bold text-slate-300 flex items-center gap-2">
-                  <svg className="w-5 h-5 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z" />
+                  <svg
+                    className="w-5 h-5 text-amber-500"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"
+                    />
                   </svg>
                   コメント ({value.comments.length})
                 </h2>
@@ -205,9 +269,7 @@ export default async function ItemDetailRoute(handle: Handle) {
                         </div>
                         <div
                           className="text-sm text-slate-300 leading-relaxed comment-text"
-                          mix={ref((el) => {
-                            el.innerHTML = comment.text || ''
-                          })}
+                          innerHTML={comment.text}
                         />
                       </div>
                     ))}

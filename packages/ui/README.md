@@ -195,7 +195,7 @@ function Layout(handle: Handle<{ children: RemixNode }>) {
 
 ## Async Components & Data Fetching
 
-You can define your component setup function as an `async` function to perform asynchronous tasks (e.g., data fetching) using the `handle.async()` helper. The helper returns an async resource object with the resolved value and refresh controls.
+You can perform asynchronous tasks (e.g., data fetching) using the `handle.async()` helper. The helper returns an async resource object with the resolved value, pending state, and refresh controls.
 
 ```tsx
 import { on, type Handle } from 'remix/ui'
@@ -242,7 +242,7 @@ export default async function WeatherForecast(handle: Handle) {
 }
 ```
 
-On the server, the asynchronous action is executed, and its resolved value is serialized and embedded in the HTML response. During client-side hydration, the component runtime creates the resource from the serialized data instead of re-running the fetch action. With `cache: 'page'`, the resource is also kept in memory until the page reloads, so keyed resources can survive unmounts and remounts. Call `resource.refresh()` when the user explicitly asks for fresh data; this works even when no explicit key was provided.
+On the server, `await handle.async()` waits for the action, then serializes the resolved value into the HTML response. In the browser, `handle.async()` returns the resource before the action resolves so components can render `resource.pending` UI during client-side navigations. During client-side hydration, the component runtime creates the resource from the serialized data instead of re-running the fetch action. With `cache: 'page'`, the resource is also kept in memory until the page reloads, so keyed resources can survive unmounts and remounts. Call `resource.refresh()` when the user explicitly asks for fresh data; this works even when no explicit key was provided.
 
 ## Server Rendering Raw Text
 

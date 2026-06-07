@@ -162,15 +162,16 @@ export interface Handle<Props = Record<string, never>, ContextValue = NoContext>
 
   /**
    * Helper to perform asynchronous tasks (e.g. data fetching) during setup.
-   * On the server, the action is executed and the resolved value is serialized. On the client
-   * during hydration, the serialized value initializes the returned resource instead of re-running
-   * the action.
+   * On the server, awaiting the returned resource executes the action and serializes the resolved
+   * value. In the browser, the resource is returned before the action resolves so components can
+   * render pending UI. During hydration, serialized values initialize the resource instead of
+   * re-running the action.
    *
    * @param action Asynchronous work that resolves the resource value.
    * @param options Cache key and reuse behavior for the resource.
    * @returns A resource object with value, status, refresh, and clear controls.
    */
-  async<T>(action: () => Promise<T>, options?: AsyncOptions): Promise<AsyncResource<T>>
+  async<T>(action: () => Promise<T>, options?: AsyncOptions): AsyncResource<T>
 }
 
 /**
@@ -373,6 +374,10 @@ class ComponentRuntime<C = NoContext> implements ComponentHandle<C> {
     let renderFn = this.#renderFn
 
     if (renderFn === undefined) {
+      if (this.initPromise) {
+        return [null, this.#dequeueTasks()]
+      }
+
       let result = this.#config.type(this.#handle)
 
       if (result instanceof Promise) {
@@ -427,10 +432,7 @@ class ComponentRuntime<C = NoContext> implements ComponentHandle<C> {
 
   isRemoved = (): boolean => this.#removed
 
-  async = async <T>(
-    action: () => Promise<T>,
-    options: AsyncOptions = {},
-  ): Promise<AsyncResource<T>> => {
+  async = <T>(action: () => Promise<T>, options: AsyncOptions = {}): AsyncResource<T> => {
     let index = this.#asyncCounter++
     let key = options.key ? `async:${options.key}` : `${this.#config.id}:async:${index}`
     let cache = options.cache ?? 'page'
@@ -438,15 +440,20 @@ class ComponentRuntime<C = NoContext> implements ComponentHandle<C> {
       | {
           data?: { a?: Record<string, unknown> }
           asyncCache?: Map<string, AsyncCacheEntry>
+          scheduler?: unknown
+          errorTarget?: EventTarget
         }
       | undefined
+    let isLiveRuntime = runtime?.scheduler !== undefined
     let hydrationStore = runtime?.data?.a
     let pageCache = runtime?.asyncCache
     let entry =
       cache === 'page' ? (pageCache?.get(key) as AsyncCacheEntry<T> | undefined) : undefined
 
     if (entry && !isAsyncCacheEntryExpired(entry)) {
-      return createAsyncResource(key, entry, action, cache, options, hydrationStore, pageCache)
+      return createAsyncResource(key, entry, action, cache, options, hydrationStore, pageCache, {
+        await: isLiveRuntime ? 'immediate' : 'block',
+      })
     }
 
     if (entry && isAsyncCacheEntryExpired(entry)) {
@@ -459,7 +466,9 @@ class ComponentRuntime<C = NoContext> implements ComponentHandle<C> {
       if (cache === 'page') {
         pageCache?.set(key, entry)
       }
-      return createAsyncResource(key, entry, action, cache, options, hydrationStore, pageCache)
+      return createAsyncResource(key, entry, action, cache, options, hydrationStore, pageCache, {
+        await: isLiveRuntime ? 'immediate' : 'block',
+      })
     }
 
     entry = {
@@ -479,8 +488,23 @@ class ComponentRuntime<C = NoContext> implements ComponentHandle<C> {
       options,
       hydrationStore,
       pageCache,
+      { await: isLiveRuntime ? 'immediate' : 'block' },
     )
-    await resource.refresh()
+    if (!isLiveRuntime) {
+      return resource
+    }
+
+    void resource
+      .refresh()
+      .then(() => {
+        if (!this.#removed) this.#scheduleUpdate()
+      })
+      .catch((error) => {
+        if (this.#removed) return
+        this.#scheduleUpdate()
+        let errorTarget = runtime?.errorTarget ?? this.frame
+        errorTarget.dispatchEvent(createComponentErrorEvent(error))
+      })
     return resource
   }
 
@@ -557,6 +581,7 @@ function createAsyncResource<T>(
   options: AsyncOptions,
   hydrationStore: Record<string, unknown> | undefined,
   pageCache: Map<string, AsyncCacheEntry> | undefined,
+  behavior: { await: 'block' | 'immediate' },
 ): AsyncResource<T> {
   async function refresh(): Promise<T> {
     if (entry.status === 'pending' && entry.promise) {
@@ -590,7 +615,7 @@ function createAsyncResource<T>(
     }
   }
 
-  return {
+  let view = {
     key,
     get status() {
       return entry.status
@@ -617,6 +642,25 @@ function createAsyncResource<T>(
       entry.promise = undefined
     },
   }
+
+  let resource = {
+    ...view,
+    then<TResult1 = typeof view, TResult2 = never>(
+      onfulfilled?: ((value: typeof view) => TResult1 | PromiseLike<TResult1>) | null | undefined,
+      onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null | undefined,
+    ): PromiseLike<TResult1 | TResult2> {
+      let ready =
+        behavior.await === 'immediate' || entry.status === 'resolved'
+          ? Promise.resolve(view)
+          : entry.status === 'rejected'
+            ? Promise.reject(entry.error)
+            : refresh().then(() => view)
+
+      return ready.then(onfulfilled, onrejected)
+    },
+  }
+
+  return resource
 }
 
 function createResolvedAsyncCacheEntry<T>(value: T, ttl: number | undefined): AsyncCacheEntry<T> {

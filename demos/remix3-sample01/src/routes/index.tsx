@@ -29,13 +29,13 @@ export default async function Index(handle: Handle) {
       if (!res.ok) throw new Error('Failed to fetch top stories')
       const ids: number[] = await res.json()
       const topIds = ids.slice(0, 30)
-      
+
       const storyPromises = topIds.map(async (id) => {
         const itemRes = await fetch(`https://hacker-news.firebaseio.com/v0/item/${id}.json`)
         if (!itemRes.ok) return null
         return itemRes.json() as Promise<Story>
       })
-      
+
       const results = await Promise.all(storyPromises)
       return results.filter((story): story is Story => story !== null)
     },
@@ -72,15 +72,51 @@ export default async function Index(handle: Handle) {
             {stories.pending ? (
               <>
                 <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
                 </svg>
                 更新中...
               </>
             ) : (
               <>
-                <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89H18" />
+                <svg
+                  className="h-4 w-4 text-white"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M16.023 9.348h4.992V4.356"
+                  />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M21.015 9.348A8.25 8.25 0 006.75 5.64L3.75 8.64"
+                  />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M7.977 14.652H2.985v4.992"
+                  />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M2.985 14.652A8.25 8.25 0 0017.25 18.36l3-3"
+                  />
                 </svg>
                 更新する
               </>
@@ -92,7 +128,10 @@ export default async function Index(handle: Handle) {
         {stories.pending && !value ? (
           <div className="space-y-4">
             {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="animate-pulse bg-slate-900/40 border border-slate-800/80 rounded-xl p-5 h-24 flex flex-col justify-between">
+              <div
+                key={i}
+                className="animate-pulse bg-slate-900/40 border border-slate-800/80 rounded-xl p-5 h-24 flex flex-col justify-between"
+              >
                 <div className="h-4 bg-slate-800 rounded w-3/4" />
                 <div className="h-3 bg-slate-800 rounded w-1/3" />
               </div>
@@ -100,49 +139,68 @@ export default async function Index(handle: Handle) {
           </div>
         ) : (
           <div className="space-y-4">
-            {value && value.map((story, index) => {
-              const domain = story.url ? new URL(story.url).hostname : null
-              return (
-                <article
-                  key={story.id}
-                  className="group relative flex gap-4 bg-slate-900/30 border border-slate-900 hover:border-slate-800/80 hover:bg-slate-900/60 rounded-xl p-4 transition-all duration-200"
-                >
-                  <div className="flex items-center justify-center text-slate-500 font-bold text-lg w-8 h-8 rounded-lg bg-slate-900/80 border border-slate-800/60 shrink-0">
-                    {index + 1}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h2 className="text-base font-semibold leading-tight text-slate-100 group-hover:text-amber-400 transition-colors">
-                      {story.url ? (
-                        <a href={story.url} target="_blank" rel="noopener noreferrer" className="hover:text-amber-400 flex items-center gap-1 inline-flex flex-wrap">
-                          {story.title}
-                          <span className="text-xs text-slate-500 font-normal hover:underline ml-1">
-                            ({domain})
-                          </span>
-                        </a>
-                      ) : (
-                        <Link to={`/item/${story.id}`} className="hover:text-amber-400">
-                          {story.title}
-                        </Link>
-                      )}
-                    </h2>
-                    <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400">
-                      <span className="font-medium text-slate-300">{story.score} points</span>
-                      <span>by</span>
-                      <span className="font-medium text-slate-300">{story.by}</span>
-                      <span>•</span>
-                      <span>{formatTime(story.time)}</span>
-                      <span>•</span>
-                      <Link to={`/item/${story.id}`} className="hover:text-amber-400 text-amber-500/80 font-medium inline-flex items-center gap-1">
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                        </svg>
-                        {story.descendants || 0} コメント
-                      </Link>
+            {value &&
+              value.map((story, index) => {
+                const domain = story.url ? new URL(story.url).hostname : null
+                return (
+                  <article
+                    key={story.id}
+                    className="group relative flex gap-4 bg-slate-900/30 border border-slate-900 hover:border-slate-800/80 hover:bg-slate-900/60 rounded-xl p-4 transition-all duration-200"
+                  >
+                    <div className="flex items-center justify-center text-slate-500 font-bold text-lg w-8 h-8 rounded-lg bg-slate-900/80 border border-slate-800/60 shrink-0">
+                      {index + 1}
                     </div>
-                  </div>
-                </article>
-              )
-            })}
+                    <div className="flex-1 min-w-0">
+                      <h2 className="text-base font-semibold leading-tight text-slate-100 group-hover:text-amber-400 transition-colors">
+                        {story.url ? (
+                          <a
+                            href={story.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="hover:text-amber-400 flex items-center gap-1 inline-flex flex-wrap"
+                          >
+                            {story.title}
+                            <span className="text-xs text-slate-500 font-normal hover:underline ml-1">
+                              ({domain})
+                            </span>
+                          </a>
+                        ) : (
+                          <Link to={`/item/${story.id}`} className="hover:text-amber-400">
+                            {story.title}
+                          </Link>
+                        )}
+                      </h2>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400">
+                        <span className="font-medium text-slate-300">{story.score} points</span>
+                        <span>by</span>
+                        <span className="font-medium text-slate-300">{story.by}</span>
+                        <span>•</span>
+                        <span>{formatTime(story.time)}</span>
+                        <span>•</span>
+                        <Link
+                          to={`/item/${story.id}`}
+                          className="hover:text-amber-400 text-amber-500/80 font-medium inline-flex items-center gap-1"
+                        >
+                          <svg
+                            className="w-3.5 h-3.5"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                            />
+                          </svg>
+                          {story.descendants || 0} コメント
+                        </Link>
+                      </div>
+                    </div>
+                  </article>
+                )
+              })}
           </div>
         )}
       </div>
